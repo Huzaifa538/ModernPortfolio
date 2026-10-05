@@ -3,18 +3,45 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { MessageCircle, Minus, Send, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { clsx } from 'clsx'
-import { api } from '../lib/api'
-import type { ChatMessage } from '../lib/types'
+import {
+  addDoc,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  increment,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  updateDoc,
+  where,
+  writeBatch,
+  type DocumentData,
+  type Timestamp,
+} from 'firebase/firestore'
+import { onAuthStateChanged } from 'firebase/auth'
+import { auth, db, isFirebaseReady } from '../lib/firebase'
 
-const CONV_KEY = 'portfolio_conv_id'
-const CONV_NAME_KEY = 'portfolio_conv_name'
-const CONV_EMAIL_KEY = 'portfolio_conv_email'
+const CHAT_KEY = 'portfolio_chat_id'
 
-function chatTime(date: string): string {
-  return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+interface LiveMessage {
+  id: string
+  sender: 'visitor' | 'admin'
+  name: string
+  text: string
+  createdAt: Timestamp | null
 }
 
-function Bubble({ msg }: { msg: ChatMessage }) {
+function tsToDate(ts: Timestamp | null | undefined): Date {
+  return ts ? ts.toDate() : new Date()
+}
+
+function chatTime(ts: Timestamp | null | undefined): string {
+  return tsToDate(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+function Bubble({ msg }: { msg: LiveMessage }) {
   const mine = msg.sender === 'visitor'
   return (
     <div className={clsx('flex', mine ? 'justify-end' : 'justify-start')}>
@@ -27,7 +54,7 @@ function Bubble({ msg }: { msg: ChatMessage }) {
               : 'rounded-bl-md border border-[var(--border)] bg-[var(--surface2)] text-[var(--text)]'
           )}
         >
-          {msg.message}
+          {msg.text}
         </div>
         <p className="font-mono mt-1 text-[10px] text-[var(--muted)]">
           {mine ? 'You' : msg.name} · {chatTime(msg.createdAt)}
@@ -38,110 +65,185 @@ function Bubble({ msg }: { msg: ChatMessage }) {
 }
 
 export function ChatWidget() {
+  const [ready] = useState(() => isFirebaseReady())
+  const [authReady, setAuthReady] = useState(false)
   const [open, setOpen] = useState(false)
-  const [hasUnread, setHasUnread] = useState(false)
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [firstMsg, setFirstMsg] = useState('')
   const [starting, setStarting] = useState(false)
-  const [conversationId, setConversationId] = useState<string | null>(() =>
-    typeof window === 'undefined' ? null : localStorage.getItem(CONV_KEY)
+  const [chatId, setChatId] = useState<string | null>(() =>
+    typeof window === 'undefined' ? null : localStorage.getItem(CHAT_KEY)
   )
-  const [visitorName, setVisitorName] = useState(() => localStorage.getItem(CONV_NAME_KEY) ?? '')
-  const [visitorEmail, setVisitorEmail] = useState(() => localStorage.getItem(CONV_EMAIL_KEY) ?? '')
-  const [thread, setThread] = useState<ChatMessage[]>([])
+  const [visitorName, setVisitorName] = useState('')
+  const [messages, setMessages] = useState<LiveMessage[]>([])
   const [loading, setLoading] = useState(false)
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
+  const [adminTyping, setAdminTyping] = useState(false)
+  const [unreadVisitor, setUnreadVisitor] = useState(0)
   const scrollRef = useRef<HTMLDivElement>(null)
-  const prevCount = useRef(0)
+  const typingTimer = useRef<number | undefined>(undefined)
+  const chatIdRef = useRef<string | null>(chatId)
+  chatIdRef.current = chatId
 
-  const loadThread = useCallback(
-    async (id: string, silent = false) => {
-      if (!silent) setLoading(true)
-      try {
-        const msgs = await api.getConversation(id)
-        // Flag unread when a new admin message arrives while the panel is closed.
-        const prevLen = prevCount.current
-        if (silent && !open && msgs.length > prevLen) {
-          const fresh = msgs.slice(prevLen)
-          if (fresh.some((m) => m.sender === 'admin')) setHasUnread(true)
-        }
-        prevCount.current = msgs.length
-        setThread(msgs)
-        const firstVisitor: ChatMessage | undefined = msgs.find((m) => m.sender === 'visitor')
-        if (firstVisitor) {
-          if (!visitorName && firstVisitor.name) {
-            setVisitorName(firstVisitor.name)
-            localStorage.setItem(CONV_NAME_KEY, firstVisitor.name)
-          }
-          if (!visitorEmail && firstVisitor.email) {
-            setVisitorEmail(firstVisitor.email)
-            localStorage.setItem(CONV_EMAIL_KEY, firstVisitor.email)
-          }
-        }
-      } catch {
-        if (!silent) {
-          localStorage.removeItem(CONV_KEY)
-          localStorage.removeItem(CONV_NAME_KEY)
-          localStorage.removeItem(CONV_EMAIL_KEY)
-          setConversationId(null)
-          setThread([])
-          prevCount.current = 0
-        }
-      } finally {
-        if (!silent) setLoading(false)
-      }
-    },
-    [open, visitorName, visitorEmail]
-  )
-
-  // Poll the thread — every 5s when open, every 15s when closed (for the badge).
+  // Wait for anonymous auth before touching Firestore.
   useEffect(() => {
-    if (!conversationId) return
-    loadThread(conversationId)
-    const timer = window.setInterval(
-      () => loadThread(conversationId, true),
-      open ? 5000 : 15000
-    )
-    return () => window.clearInterval(timer)
-  }, [conversationId, open, loadThread])
+    if (!ready || !auth) return
+    const unsub = onAuthStateChanged(auth, (user) => setAuthReady(!!user))
+    return unsub
+  }, [ready])
 
+  const markRead = useCallback(async (id: string) => {
+    if (!db) return
+    try {
+      const chatRef = doc(db, 'portfolio_chats', id)
+      const snap = await getDoc(chatRef)
+      const data = snap.data() as DocumentData | undefined
+      if (data && (data.unreadVisitor ?? 0) > 0) {
+        const batch = writeBatch(db)
+        batch.update(chatRef, { unreadVisitor: 0 })
+        // Mark unread admin messages as read too.
+        const unread = await getDocs(
+          query(
+            collection(db, 'portfolio_chats', id, 'messages'),
+            where('sender', '==', 'admin'),
+            where('read', '==', false)
+          )
+        )
+        unread.forEach((d) => batch.update(d.ref, { read: true }))
+        await batch.commit()
+      }
+    } catch {
+      // Read receipts are best-effort.
+    }
+  }, [])
+
+  // Real-time subscription to the chat doc (typing + unread) and its messages.
+  useEffect(() => {
+    if (!ready || !db || !authReady || !chatId) {
+      setMessages([])
+      setAdminTyping(false)
+      setUnreadVisitor(0)
+      return
+    }
+    setLoading(true)
+    const unsubs: Array<() => void> = []
+
+    unsubs.push(
+      onSnapshot(doc(db, 'portfolio_chats', chatId), (snap) => {
+        const data = snap.data() as DocumentData | undefined
+        if (!data) {
+          // Chat was deleted — reset to the start form.
+          localStorage.removeItem(CHAT_KEY)
+          setChatId(null)
+          setMessages([])
+          setVisitorName('')
+          return
+        }
+        setAdminTyping(!!data.adminTyping)
+        setUnreadVisitor(data.unreadVisitor ?? 0)
+        if (data.name && !visitorName) setVisitorName(data.name)
+      })
+    )
+
+    unsubs.push(
+      onSnapshot(
+        query(collection(db, 'portfolio_chats', chatId, 'messages'), orderBy('createdAt', 'asc')),
+        (snap) => {
+          const list: LiveMessage[] = snap.docs.map((d) => {
+            const data = d.data() as DocumentData
+            return {
+              id: d.id,
+              sender: data.sender as 'visitor' | 'admin',
+              name: (data.name as string) ?? '',
+              text: (data.text as string) ?? '',
+              createdAt: (data.createdAt as Timestamp) ?? null,
+            }
+          })
+          setMessages(list)
+          setLoading(false)
+        },
+        () => setLoading(false)
+      )
+    )
+
+    return () => unsubs.forEach((u) => u())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, authReady, chatId])
+
+  // When the panel is open and new admin messages arrive, mark them read.
+  useEffect(() => {
+    if (open && chatId && unreadVisitor > 0) markRead(chatId)
+  }, [open, chatId, unreadVisitor, markRead])
+
+  // Keep the latest message in view.
   useEffect(() => {
     const el = scrollRef.current
     if (el && open) el.scrollTop = el.scrollHeight
-  }, [thread, open])
+  }, [messages, adminTyping, open])
 
   const toggle = () => {
     setOpen((o) => {
-      if (!o) setHasUnread(false)
-      return !o
+      const next = !o
+      if (next && chatIdRef.current) markRead(chatIdRef.current)
+      return next
     })
+  }
+
+  const setTyping = useCallback(
+    async (typing: boolean) => {
+      const id = chatIdRef.current
+      if (!db || !id) return
+      try {
+        await updateDoc(doc(db, 'portfolio_chats', id), { visitorTyping: typing })
+      } catch {
+        // best-effort
+      }
+    },
+    []
+  )
+
+  const handleInput = (value: string) => {
+    setInput(value)
+    // Debounced typing indicator: set true now, reset after 2s idle.
+    void setTyping(true)
+    window.clearTimeout(typingTimer.current)
+    typingTimer.current = window.setTimeout(() => void setTyping(false), 2000)
   }
 
   const startConversation = async (e: FormEvent) => {
     e.preventDefault()
+    if (!db || !authReady) return toast.error('Chat is still connecting — try again in a moment')
     if (name.trim().length < 2) return toast.error('Please enter your name')
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return toast.error('Enter a valid email')
     if (firstMsg.trim().length < 3) return toast.error('Write your message')
     setStarting(true)
     try {
-      const res = await api.sendContact({
+      const chatRef = await addDoc(collection(db, 'portfolio_chats'), {
         name: name.trim(),
         email: email.trim(),
-        message: firstMsg.trim(),
+        createdAt: serverTimestamp(),
+        lastMessage: firstMsg.trim(),
+        lastAt: serverTimestamp(),
+        lastSender: 'visitor',
+        unreadAdmin: 1,
+        unreadVisitor: 0,
+        visitorTyping: false,
+        adminTyping: false,
       })
-      if (res.conversationId) {
-        localStorage.setItem(CONV_KEY, res.conversationId)
-        localStorage.setItem(CONV_NAME_KEY, name.trim())
-        localStorage.setItem(CONV_EMAIL_KEY, email.trim())
-        setVisitorName(name.trim())
-        setVisitorEmail(email.trim())
-        setConversationId(res.conversationId)
-        prevCount.current = 0
-        setFirstMsg('')
-        toast.success('Message sent!')
-      }
+      await addDoc(collection(db, 'portfolio_chats', chatRef.id, 'messages'), {
+        sender: 'visitor',
+        name: name.trim(),
+        text: firstMsg.trim(),
+        createdAt: serverTimestamp(),
+        read: false,
+      })
+      localStorage.setItem(CHAT_KEY, chatRef.id)
+      setChatId(chatRef.id)
+      setVisitorName(name.trim())
+      setFirstMsg('')
+      toast.success('Message sent!')
     } catch {
       toast.error('Could not send — try again')
     } finally {
@@ -152,17 +254,25 @@ export function ChatWidget() {
   const sendFollowUp = async (e: FormEvent) => {
     e.preventDefault()
     const text = input.trim()
-    if (!text || sending || !conversationId || !visitorName || !visitorEmail) return
+    if (!text || sending || !db || !chatId || !visitorName) return
     setSending(true)
     try {
-      await api.sendContact({
+      await addDoc(collection(db, 'portfolio_chats', chatId, 'messages'), {
+        sender: 'visitor',
         name: visitorName,
-        email: visitorEmail,
-        message: text,
-        conversationId,
+        text,
+        createdAt: serverTimestamp(),
+        read: false,
+      })
+      await updateDoc(doc(db, 'portfolio_chats', chatId), {
+        lastMessage: text,
+        lastAt: serverTimestamp(),
+        lastSender: 'visitor',
+        unreadAdmin: increment(1),
+        visitorTyping: false,
       })
       setInput('')
-      loadThread(conversationId, true)
+      window.clearTimeout(typingTimer.current)
     } catch {
       toast.error('Could not send — try again')
     } finally {
@@ -171,17 +281,19 @@ export function ChatWidget() {
   }
 
   const newConversation = () => {
-    localStorage.removeItem(CONV_KEY)
-    localStorage.removeItem(CONV_NAME_KEY)
-    localStorage.removeItem(CONV_EMAIL_KEY)
-    setConversationId(null)
-    setThread([])
-    prevCount.current = 0
+    localStorage.removeItem(CHAT_KEY)
+    setChatId(null)
+    setMessages([])
+    setVisitorName('')
     setInput('')
     setName('')
     setEmail('')
     setFirstMsg('')
+    setUnreadVisitor(0)
   }
+
+  // Hide entirely when Firebase isn't configured.
+  if (!ready) return null
 
   return (
     <>
@@ -197,9 +309,9 @@ export function ChatWidget() {
         whileTap={{ scale: 0.92 }}
       >
         {open ? <Minus size={24} /> : <MessageCircle size={26} />}
-        {hasUnread && !open && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold">
-            !
+        {unreadVisitor > 0 && !open && (
+          <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold">
+            {unreadVisitor > 9 ? '9+' : unreadVisitor}
           </span>
         )}
       </motion.button>
@@ -224,7 +336,7 @@ export function ChatWidget() {
                 <p className="font-semibold">Chat with Huzaifa</p>
                 <p className="flex items-center gap-1.5 text-xs opacity-90">
                   <span className="h-2 w-2 rounded-full bg-green-300" />
-                  Typically replies quickly
+                  {adminTyping ? 'Huzaifa is typing…' : 'Typically replies quickly'}
                 </p>
               </div>
               <button onClick={toggle} aria-label="Close chat" className="rounded-full p-1 hover:bg-white/15">
@@ -232,11 +344,11 @@ export function ChatWidget() {
               </button>
             </div>
 
-            {!conversationId ? (
+            {!chatId ? (
               /* First-time form */
               <form onSubmit={startConversation} className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
                 <p className="text-sm text-[var(--muted)]">
-                  Drop me a message and I'll get back to you right here.
+                  Drop me a message and I'll get back to you right here — live.
                 </p>
                 <input
                   value={name}
@@ -260,11 +372,11 @@ export function ChatWidget() {
                 />
                 <button
                   type="submit"
-                  disabled={starting}
+                  disabled={starting || !authReady}
                   className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#6366f1] to-[#8b5cf6] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
                 >
                   <Send size={16} />
-                  {starting ? 'Sending…' : 'Start chatting'}
+                  {starting ? 'Sending…' : authReady ? 'Start chatting' : 'Connecting…'}
                 </button>
               </form>
             ) : (
@@ -273,16 +385,32 @@ export function ChatWidget() {
                 <div ref={scrollRef} className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
                   {loading ? (
                     <p className="py-8 text-center text-sm text-[var(--muted)]">Loading…</p>
-                  ) : thread.length === 0 ? (
+                  ) : messages.length === 0 ? (
                     <p className="py-8 text-center text-sm text-[var(--muted)]">Say hello! 👋</p>
                   ) : (
-                    thread.map((m, i) => <Bubble key={i} msg={m} />)
+                    messages.map((m) => <Bubble key={m.id} msg={m} />)
+                  )}
+                  {adminTyping && (
+                    <div className="flex justify-start">
+                      <div className="rounded-2xl rounded-bl-md border border-[var(--border)] bg-[var(--surface2)] px-4 py-2.5">
+                        <span className="flex gap-1">
+                          {[0, 1, 2].map((i) => (
+                            <motion.span
+                              key={i}
+                              className="h-1.5 w-1.5 rounded-full bg-[var(--muted)]"
+                              animate={{ opacity: [0.3, 1, 0.3] }}
+                              transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.2 }}
+                            />
+                          ))}
+                        </span>
+                      </div>
+                    </div>
                   )}
                 </div>
                 <form onSubmit={sendFollowUp} className="flex items-center gap-2 border-t border-[var(--border)] p-3">
                   <input
                     value={input}
-                    onChange={(e) => setInput(e.target.value)}
+                    onChange={(e) => handleInput(e.target.value)}
                     placeholder="Type a message…"
                     className="flex-1 rounded-xl border border-[var(--border)] bg-[var(--surface2)] px-3.5 py-2.5 text-sm text-[var(--text)] outline-none placeholder:text-[var(--muted)] focus:border-[#6366f1]"
                   />
