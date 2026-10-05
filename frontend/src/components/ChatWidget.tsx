@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { MessageCircle, Minus, Send, X } from 'lucide-react'
+import { LogOut, MessageCircle, Minus, Send, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { clsx } from 'clsx'
 import {
@@ -14,16 +14,15 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
   updateDoc,
   where,
   writeBatch,
   type DocumentData,
   type Timestamp,
 } from 'firebase/firestore'
-import { onAuthStateChanged } from 'firebase/auth'
-import { auth, db, isFirebaseReady } from '../lib/firebase'
-
-const CHAT_KEY = 'portfolio_chat_id'
+import { onAuthStateChanged, type User } from 'firebase/auth'
+import { auth, db, isFirebaseReady, signInWithGoogle, signOutUser } from '../lib/firebase'
 
 interface LiveMessage {
   id: string
@@ -33,12 +32,9 @@ interface LiveMessage {
   createdAt: Timestamp | null
 }
 
-function tsToDate(ts: Timestamp | null | undefined): Date {
-  return ts ? ts.toDate() : new Date()
-}
-
 function chatTime(ts: Timestamp | null | undefined): string {
-  return tsToDate(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const d = ts ? ts.toDate() : new Date()
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
 function Bubble({ msg }: { msg: LiveMessage }) {
@@ -66,27 +62,33 @@ function Bubble({ msg }: { msg: LiveMessage }) {
 
 export function ChatWidget() {
   const [ready] = useState(() => isFirebaseReady())
-  const [authReady, setAuthReady] = useState(false)
+  const [user, setUser] = useState<User | null>(null)
+  const [authChecking, setAuthChecking] = useState(true)
+  const [signingIn, setSigningIn] = useState(false)
   const [open, setOpen] = useState(false)
-  const [chatId, setChatId] = useState<string | null>(() =>
-    typeof window === 'undefined' ? null : localStorage.getItem(CHAT_KEY)
-  )
+  // One chat per Google user — chatId is the user's UID.
+  const chatId = user?.uid ?? null
   const [messages, setMessages] = useState<LiveMessage[]>([])
   const [loading, setLoading] = useState(false)
-  const [creating, setCreating] = useState(false)
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [adminTyping, setAdminTyping] = useState(false)
   const [unreadVisitor, setUnreadVisitor] = useState(0)
   const scrollRef = useRef<HTMLDivElement>(null)
   const typingTimer = useRef<number | undefined>(undefined)
-  const chatIdRef = useRef<string | null>(chatId)
+  const chatIdRef = useRef<string | null>(null)
   chatIdRef.current = chatId
 
-  // Wait for anonymous auth before touching Firestore.
+  // Track Google auth state.
   useEffect(() => {
-    if (!ready || !auth) return
-    const unsub = onAuthStateChanged(auth, (user) => setAuthReady(!!user))
+    if (!ready || !auth) {
+      setAuthChecking(false)
+      return
+    }
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setUser(u)
+      setAuthChecking(false)
+    })
     return unsub
   }, [ready])
 
@@ -99,7 +101,6 @@ export function ChatWidget() {
       if (data && (data.unreadVisitor ?? 0) > 0) {
         const batch = writeBatch(db)
         batch.update(chatRef, { unreadVisitor: 0 })
-        // Mark unread admin messages as read too.
         const unread = await getDocs(
           query(
             collection(db, 'portfolio_chats', id, 'messages'),
@@ -115,9 +116,40 @@ export function ChatWidget() {
     }
   }, [])
 
+  // Ensure the user's chat doc exists (one per Google UID).
+  const ensureChatDoc = useCallback(async () => {
+    if (!db || !user || !chatId) return
+    try {
+      const chatRef = doc(db, 'portfolio_chats', chatId)
+      const snap = await getDoc(chatRef)
+      if (!snap.exists()) {
+        await setDoc(chatRef, {
+          name: user.displayName ?? 'Google User',
+          email: user.email ?? '',
+          photoURL: user.photoURL ?? '',
+          uid: user.uid,
+          createdAt: serverTimestamp(),
+          lastMessage: '',
+          lastAt: serverTimestamp(),
+          lastSender: 'visitor',
+          unreadAdmin: 0,
+          unreadVisitor: 0,
+          visitorTyping: false,
+          adminTyping: false,
+        })
+      }
+    } catch {
+      // best-effort
+    }
+  }, [user, chatId])
+
+  useEffect(() => {
+    if (user && chatId) void ensureChatDoc()
+  }, [user, chatId, ensureChatDoc])
+
   // Real-time subscription to the chat doc (typing + unread) and its messages.
   useEffect(() => {
-    if (!ready || !db || !authReady || !chatId) {
+    if (!ready || !db || !chatId) {
       setMessages([])
       setAdminTyping(false)
       setUnreadVisitor(0)
@@ -129,13 +161,7 @@ export function ChatWidget() {
     unsubs.push(
       onSnapshot(doc(db, 'portfolio_chats', chatId), (snap) => {
         const data = snap.data() as DocumentData | undefined
-        if (!data) {
-          // Chat was deleted — reset.
-          localStorage.removeItem(CHAT_KEY)
-          setChatId(null)
-          setMessages([])
-          return
-        }
+        if (!data) return
         setAdminTyping(!!data.adminTyping)
         setUnreadVisitor(data.unreadVisitor ?? 0)
       })
@@ -163,8 +189,7 @@ export function ChatWidget() {
     )
 
     return () => unsubs.forEach((u) => u())
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, authReady, chatId])
+  }, [ready, chatId])
 
   // When the panel is open and new admin messages arrive, mark them read.
   useEffect(() => {
@@ -185,6 +210,29 @@ export function ChatWidget() {
     })
   }
 
+  const handleGoogleSignIn = async () => {
+    setSigningIn(true)
+    try {
+      await signInWithGoogle()
+      toast.success('Signed in — say hello!')
+    } catch {
+      toast.error('Google sign-in failed — try again')
+    } finally {
+      setSigningIn(false)
+    }
+  }
+
+  const handleSignOut = async () => {
+    try {
+      await signOutUser()
+      setMessages([])
+      setInput('')
+      toast.success('Signed out')
+    } catch {
+      toast.error('Could not sign out')
+    }
+  }
+
   const setTyping = useCallback(
     async (typing: boolean) => {
       const id = chatIdRef.current
@@ -200,65 +248,28 @@ export function ChatWidget() {
 
   const handleInput = (value: string) => {
     setInput(value)
-    // Debounced typing indicator: set true now, reset after 2s idle.
     void setTyping(true)
     window.clearTimeout(typingTimer.current)
     typingTimer.current = window.setTimeout(() => void setTyping(false), 2000)
   }
 
-  // Auto-create a chat doc the moment the panel opens (no form — direct chat).
-  const ensureChat = useCallback(async (): Promise<string | null> => {
-    if (chatIdRef.current) return chatIdRef.current
-    if (!db || !authReady || creating) return null
-    setCreating(true)
-    try {
-      const chatRef = await addDoc(collection(db, 'portfolio_chats'), {
-        name: 'Visitor',
-        email: '',
-        createdAt: serverTimestamp(),
-        lastMessage: '',
-        lastAt: serverTimestamp(),
-        lastSender: 'visitor',
-        unreadAdmin: 0,
-        unreadVisitor: 0,
-        visitorTyping: false,
-        adminTyping: false,
-      })
-      localStorage.setItem(CHAT_KEY, chatRef.id)
-      setChatId(chatRef.id)
-      return chatRef.id
-    } catch {
-      toast.error('Could not connect — try again')
-      return null
-    } finally {
-      setCreating(false)
-    }
-  }, [authReady, creating])
-
-  // When the panel opens without a chat, create one in the background.
-  useEffect(() => {
-    if (open && !chatIdRef.current && db && authReady && !creating) {
-      void ensureChat()
-    }
-  }, [open, authReady, creating, ensureChat])
-
-  const sendFollowUp = async (e: FormEvent) => {
+  const sendMessage = async (e: FormEvent) => {
     e.preventDefault()
     const text = input.trim()
-    if (!text || sending || !db) return
-    // Make sure a chat exists (creates one on the very first message).
-    const id = chatIdRef.current ?? (await ensureChat())
-    if (!id) return
+    if (!text || sending || !db || !chatId || !user) return
     setSending(true)
     try {
-      await addDoc(collection(db, 'portfolio_chats', id, 'messages'), {
+      await addDoc(collection(db, 'portfolio_chats', chatId, 'messages'), {
         sender: 'visitor',
-        name: 'Visitor',
+        name: user.displayName ?? 'Google User',
         text,
         createdAt: serverTimestamp(),
         read: false,
       })
-      await updateDoc(doc(db, 'portfolio_chats', id), {
+      await updateDoc(doc(db, 'portfolio_chats', chatId), {
+        name: user.displayName ?? 'Google User',
+        email: user.email ?? '',
+        photoURL: user.photoURL ?? '',
         lastMessage: text,
         lastAt: serverTimestamp(),
         lastSender: 'visitor',
@@ -272,14 +283,6 @@ export function ChatWidget() {
     } finally {
       setSending(false)
     }
-  }
-
-  const newConversation = () => {
-    localStorage.removeItem(CHAT_KEY)
-    setChatId(null)
-    setMessages([])
-    setInput('')
-    setUnreadVisitor(0)
   }
 
   // Hide entirely when Firebase isn't configured.
@@ -329,23 +332,94 @@ export function ChatWidget() {
                   {adminTyping ? 'Huzaifa is typing…' : 'Typically replies quickly'}
                 </p>
               </div>
-              <button onClick={toggle} aria-label="Close chat" className="rounded-full p-1 hover:bg-white/15">
-                <X size={20} />
-              </button>
+              <div className="flex items-center gap-1">
+                {user && (
+                  <button
+                    onClick={handleSignOut}
+                    aria-label="Sign out"
+                    title="Sign out"
+                    className="rounded-full p-1.5 hover:bg-white/15"
+                  >
+                    <LogOut size={18} />
+                  </button>
+                )}
+                <button onClick={toggle} aria-label="Close chat" className="rounded-full p-1 hover:bg-white/15">
+                  <X size={20} />
+                </button>
+              </div>
             </div>
 
-            {/* Direct live chat — no form, just type and send */}
-            <div ref={scrollRef} className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
-              {loading || creating || !authReady ? (
-                <p className="py-8 text-center text-sm text-[var(--muted)]">Connecting…</p>
-              ) : messages.length === 0 ? (
-                <div className="py-8 text-center">
-                  <p className="text-sm text-[var(--muted)]">Say hello! 👋</p>
-                  <p className="mt-1 text-xs text-[var(--muted)]">Huzaifa will reply here live.</p>
+            {authChecking ? (
+              <p className="py-8 text-center text-sm text-[var(--muted)]">Connecting…</p>
+            ) : !user ? (
+              /* Google sign-in gate */
+              <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-r from-[#6366f1] to-[#8b5cf6] text-white">
+                  <MessageCircle size={30} />
                 </div>
-              ) : (
-                messages.map((m) => <Bubble key={m.id} msg={m} />)
-              )}
+                <div>
+                  <p className="font-semibold text-[var(--text)]">Live chat with Huzaifa</p>
+                  <p className="mt-1 text-sm text-[var(--muted)]">
+                    Sign in with Google to start chatting — your messages stay private.
+                  </p>
+                </div>
+                <button
+                  onClick={handleGoogleSignIn}
+                  disabled={signingIn}
+                  className="flex items-center gap-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface2)] px-5 py-2.5 text-sm font-semibold text-[var(--text)] transition hover:shadow-md disabled:opacity-60"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24">
+                    <path
+                      fill="#4285F4"
+                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.84z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                    />
+                  </svg>
+                  {signingIn ? 'Signing in…' : 'Sign in with Google'}
+                </button>
+              </div>
+            ) : (
+              /* Live thread */
+              <>
+                <div className="flex items-center gap-2.5 border-b border-[var(--border)] px-4 py-2.5">
+                  {user.photoURL ? (
+                    <img src={user.photoURL} alt="" className="h-8 w-8 rounded-full" />
+                  ) : (
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-r from-[#6366f1] to-[#8b5cf6] text-sm font-bold text-white">
+                      {(user.displayName ?? 'U')[0]?.toUpperCase()}
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-[var(--text)]">
+                      {user.displayName ?? 'Google User'}
+                    </p>
+                    <p className="truncate text-xs text-[var(--muted)]">{user.email}</p>
+                  </div>
+                </div>
+                <div ref={scrollRef} className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
+                  {loading ? (
+                    <p className="py-8 text-center text-sm text-[var(--muted)]">Loading…</p>
+                  ) : messages.length === 0 ? (
+                    <div className="py-8 text-center">
+                      <p className="text-sm text-[var(--muted)]">
+                        Hi {user.displayName?.split(' ')[0] ?? 'there'}! 👋
+                      </p>
+                      <p className="mt-1 text-xs text-[var(--muted)]">Say hello — Huzaifa will reply here live.</p>
+                    </div>
+                  ) : (
+                    messages.map((m) => <Bubble key={m.id} msg={m} />)
+                  )}
                   {adminTyping && (
                     <div className="flex justify-start">
                       <div className="rounded-2xl rounded-bl-md border border-[var(--border)] bg-[var(--surface2)] px-4 py-2.5">
@@ -363,7 +437,7 @@ export function ChatWidget() {
                     </div>
                   )}
                 </div>
-                <form onSubmit={sendFollowUp} className="flex items-center gap-2 border-t border-[var(--border)] p-3">
+                <form onSubmit={sendMessage} className="flex items-center gap-2 border-t border-[var(--border)] p-3">
                   <input
                     value={input}
                     onChange={(e) => handleInput(e.target.value)}
@@ -379,12 +453,8 @@ export function ChatWidget() {
                     <Send size={17} />
                   </button>
                 </form>
-                <button
-                  onClick={newConversation}
-                  className="border-t border-[var(--border)] py-1.5 text-center text-xs text-[var(--muted)] hover:text-[var(--text)]"
-                >
-                  Start a new conversation
-                </button>
+              </>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

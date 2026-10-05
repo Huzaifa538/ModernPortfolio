@@ -1,5 +1,5 @@
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app'
-import { getAuth, signInAnonymously, type Auth } from 'firebase/auth'
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, type Auth, type User } from 'firebase/auth'
 import { getFirestore, type Firestore } from 'firebase/firestore'
 
 const firebaseConfig = {
@@ -19,12 +19,22 @@ try {
   app = getApps().length > 0 ? getApps()[0]! : initializeApp(firebaseConfig)
   auth = getAuth(app)
   db = getFirestore(app)
-  // Sign in anonymously so Firestore rules (request.auth != null) pass.
-  signInAnonymously(auth).catch(() => {
-    // Anonymous auth failing just means chat won't connect; the site still works.
-  })
 } catch {
   // Firebase misconfigured — chat widget will hide itself.
+}
+
+const googleProvider = new GoogleAuthProvider()
+
+/** Sign in with Google popup. Returns the user or throws. */
+export async function signInWithGoogle(): Promise<User> {
+  if (!auth) throw new Error('Firebase not configured')
+  const result = await signInWithPopup(auth, googleProvider)
+  return result.user
+}
+
+/** Sign out the current user. */
+export async function signOutUser(): Promise<void> {
+  if (auth) await signOut(auth)
 }
 
 export { auth, db }
