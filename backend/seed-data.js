@@ -1,4 +1,4 @@
-// Shared seed data — creates the admin user + demo portfolio content.
+// Shared seed data — Huzaifa Adam's real portfolio content.
 // Uses the CURRENT mongoose connection (no connect/disconnect here),
 // so both `npm run seed` and the server's auto-seed can use it.
 const bcrypt = require('bcryptjs');
@@ -12,163 +12,160 @@ const Testimonial = require('./models/Testimonial');
 const Message = require('./models/Message');
 
 async function seedData() {
-// Start from a clean slate — makes the script safe to re-run.
-await Promise.all([
-  User.deleteMany({}),
-  Profile.deleteMany({}),
-  Project.deleteMany({}),
-  Skill.deleteMany({}),
-  Experience.deleteMany({}),
-  Testimonial.deleteMany({}),
-  Message.deleteMany({}),
-]);
-console.log('🧹 Cleared existing data');
+  // Start from a clean slate — makes the script safe to re-run.
+  await Promise.all([
+    User.deleteMany({}),
+    Profile.deleteMany({}),
+    Project.deleteMany({}),
+    Skill.deleteMany({}),
+    Experience.deleteMany({}),
+    Testimonial.deleteMany({}),
+    Message.deleteMany({}),
+  ]);
+  console.log('🧹 Cleared existing data');
 
-// --- Admin user ---
-const hashed = await bcrypt.hash(process.env.ADMIN_PASSWORD || 'change-me-in-prod-123', 10);
-await User.create({ username: process.env.ADMIN_USERNAME || 'admin', password: hashed });
-console.log(`👤 Admin user created: ${process.env.ADMIN_USERNAME || 'admin'}`);
+  // --- Admin user ---
+  const hashed = await bcrypt.hash(process.env.ADMIN_PASSWORD || 'admin123', 10);
+  await User.create({ username: process.env.ADMIN_USERNAME || 'admin', password: hashed });
+  console.log(`👤 Admin user created: ${process.env.ADMIN_USERNAME || 'admin'}`);
 
-// --- Profile ---
-await Profile.create({
-  fullName: 'Alex Carter',
-  heroTitle: "Hi, I'm Alex Carter",
-  heroSubtitle: 'I build fast, friendly web apps that people actually enjoy using.',
-  roles: ['Full-Stack Developer', 'UI Engineer', 'Open Source Contributor'],
-  bio: "I'm a full-stack developer with 6 years of experience turning rough ideas into polished products. I care about clean code, honest UX and shipping things that hold up in the real world.",
-  aboutText:
-    'For the past 6 years I\'ve been building web applications for startups and agencies — everything from landing pages to full dashboards. My sweet spot is the MERN stack: React up front, Node behind it, Mongo where it fits. When I\'m not shipping, I\'m contributing to open source or writing about what I learned.',
-  avatarUrl: 'https://i.pravatar.cc/400?img=12',
-  resumeUrl: '',
-  email: 'hello@alexcarter.dev',
-  phone: '+1 (555) 010-2030',
-  location: 'Austin, TX',
-  githubUrl: 'https://github.com',
-  linkedinUrl: 'https://linkedin.com',
-  twitterUrl: 'https://x.com',
-  availableForWork: true,
-  yearsExperience: 6,
-  projectsCompleted: 48,
-  happyClients: 21,
-  seoTitle: 'Alex Carter — Full-Stack Developer',
-  seoDescription: 'Portfolio of Alex Carter, a full-stack developer building modern web applications.',
-});
-console.log('📝 Profile created');
+  // --- Profile — Huzaifa Adam (Facebook + LinkedIn details) ---
+  await Profile.create({
+    fullName: 'Huzaifa Adam',
+    heroTitle: "Hi, I'm Huzaifa Adam",
+    heroSubtitle: 'I build modern web experiences that people love.',
+    roles: ['Front-End Developer', 'Digital Marketer', 'Video Editor'],
+    bio: "I'm a front-end developer from Karachi, Pakistan. I build fast, modern websites with React and JavaScript, grow brands with digital marketing, and bring stories to life with video editing.",
+    aboutText:
+      "I turn ideas into polished digital products — from responsive websites and e-commerce stores to engaging video content. My toolkit spans HTML, CSS, JavaScript, TypeScript, React and Node.js, plus digital marketing and video editing. I care about clean code, honest design and shipping work that actually performs.",
+    avatarUrl: '',
+    resumeUrl: '',
+    email: 'huzaifaadam321@gmail.com',
+    phone: '+92 326 2364378',
+    location: 'Karachi, Pakistan',
+    githubUrl: 'https://github.com/Huzaifa538',
+    linkedinUrl: 'https://www.linkedin.com/in/huzaifawebdev/',
+    twitterUrl: '',
+    availableForWork: true,
+    yearsExperience: 3,
+    projectsCompleted: 12,
+    happyClients: 8,
+    seoTitle: 'Huzaifa Adam — Front-End Developer',
+    seoDescription: 'Portfolio of Huzaifa Adam, a front-end developer from Karachi building modern web experiences.',
+  });
+  console.log('📝 Profile created');
 
-// --- Projects ---
-await Project.create([
-  {
-    title: 'Pulseboard Analytics',
-    slug: 'pulseboard-analytics',
-    description: 'Real-time analytics dashboard with live charts and custom reports.',
-    longDescription:
-      'Pulseboard is a SaaS analytics dashboard built for a marketing startup. It streams events over WebSockets, aggregates them in MongoDB and renders live charts with zero refresh. Includes role-based access, PDF report exports and a custom query builder for non-technical users.',
-    imageUrl: 'https://picsum.photos/seed/pulseboard/1200/800',
-    gallery: ['https://picsum.photos/seed/pulseboard-2/1200/800', 'https://picsum.photos/seed/pulseboard-3/1200/800'],
-    techStack: ['React', 'Node.js', 'Express', 'MongoDB', 'Socket.io', 'Tailwind CSS'],
-    category: 'Web',
-    liveUrl: 'https://example.com',
-    githubUrl: 'https://github.com',
-    featured: true,
-    order: 0,
-  },
-  {
-    title: 'Nomad Gear Store',
-    slug: 'nomad-gear-store',
-    description: 'Headless e-commerce storefront for an outdoor gear brand.',
-    longDescription:
-      'A headless storefront with a custom cart, Stripe checkout and an admin panel for inventory. Server-side rendered product pages pushed the Lighthouse performance score from 62 to 98, and the checkout conversion rate went up 18% after launch.',
-    imageUrl: 'https://picsum.photos/seed/nomadgear/1200/800',
-    gallery: ['https://picsum.photos/seed/nomadgear-2/1200/800'],
-    techStack: ['Next.js', 'TypeScript', 'Stripe', 'Sanity CMS'],
-    category: 'Web',
-    liveUrl: 'https://example.com',
-    githubUrl: 'https://github.com',
-    featured: false,
-    order: 1,
-  },
-  {
-    title: 'Habitloop Mobile',
-    slug: 'habitloop-mobile',
-    description: 'Cross-platform habit tracker with streaks, reminders and social challenges.',
-    longDescription:
-      'Habitloop is a React Native app that helps people stick to habits with streaks, smart reminders and friend challenges. Offline-first with a local SQLite store that syncs when the network is back. Hit 25k downloads in its first year on both stores.',
-    imageUrl: 'https://picsum.photos/seed/habitloop/1200/800',
-    gallery: [],
-    techStack: ['React Native', 'Expo', 'Firebase', 'SQLite'],
-    category: 'Mobile',
-    liveUrl: 'https://example.com',
-    githubUrl: 'https://github.com',
-    featured: false,
-    order: 2,
-  },
-]);
-console.log('💼 3 projects created (1 featured)');
+  // --- Projects — from GitHub (Huzaifa538) ---
+  await Project.create([
+    {
+      title: 'Live Chat',
+      slug: 'live-chat',
+      description: 'Real-time chat app with Google sign-in, live messaging and typing indicator.',
+      longDescription:
+        'A real-time chat application built with Firebase Firestore. Features Google sign-in, instant messaging, a live typing indicator and a modern dark UI. Deployed on Vercel with automatic deployments from GitHub.',
+      imageUrl: 'https://picsum.photos/seed/livechat-huzaifa/1200/800',
+      gallery: [],
+      techStack: ['JavaScript', 'Firebase', 'Firestore', 'Vercel'],
+      category: 'Web',
+      liveUrl: 'https://huzaifa-live-chat-psi.vercel.app/',
+      githubUrl: 'https://github.com/Huzaifa538/Live-Chat',
+      featured: true,
+      order: 0,
+    },
+    {
+      title: 'HTC E-commerce Website',
+      slug: 'htc-ecommerce',
+      description: 'Complete hardware e-commerce store with 111 products, admin panel and order management.',
+      longDescription:
+        'A full e-commerce website for Hammer Trading Company. 111 hardware products, shopping cart, checkout, order tracking, and a complete admin panel with sales reports, inventory and customer management. Built with Next.js and Firebase.',
+      imageUrl: 'https://picsum.photos/seed/htc-huzaifa/1200/800',
+      gallery: [],
+      techStack: ['Next.js', 'TypeScript', 'Tailwind CSS', 'Firebase'],
+      category: 'Web',
+      liveUrl: 'https://htc-website-two.vercel.app',
+      githubUrl: 'https://github.com/Huzaifa538',
+      featured: true,
+      order: 1,
+    },
+    {
+      title: 'SK Wood Works Platform',
+      slug: 'sk-wood-works',
+      description: 'Business management platform with admin panel, orders and digital khata.',
+      longDescription:
+        'A complete business platform for SK Wood Works — premium public website plus admin panel with customer management, orders, digital khata, quotations and reporting. Built with Next.js and PostgreSQL.',
+      imageUrl: 'https://picsum.photos/seed/skwood-huzaifa/1200/800',
+      gallery: [],
+      techStack: ['Next.js', 'TypeScript', 'PostgreSQL', 'Tailwind CSS'],
+      category: 'Web',
+      liveUrl: 'https://sk-wood-works-six.vercel.app',
+      githubUrl: 'https://github.com/Huzaifa538',
+      featured: false,
+      order: 2,
+    },
+    {
+      title: 'My Portfolio',
+      slug: 'my-portfolio',
+      description: 'Personal portfolio website — fully responsive.',
+      longDescription:
+        'My personal portfolio website showcasing my work as a front-end developer. Fully responsive with a modern design.',
+      imageUrl: 'https://picsum.photos/seed/portfolio-huzaifa/1200/800',
+      gallery: [],
+      techStack: ['HTML', 'CSS', 'JavaScript'],
+      category: 'Web',
+      liveUrl: 'https://huzaifa-myportfolio.vercel.app',
+      githubUrl: 'https://github.com/Huzaifa538/My-Portfolio',
+      featured: false,
+      order: 3,
+    },
+  ]);
+  console.log('💼 4 projects created (2 featured)');
 
-// --- Skills ---
-await Skill.create([
-  { name: 'React', category: 'Frontend', level: 95, order: 0 },
-  { name: 'JavaScript', category: 'Frontend', level: 95, order: 1 },
-  { name: 'TypeScript', category: 'Frontend', level: 88, order: 2 },
-  { name: 'Tailwind CSS', category: 'Frontend', level: 92, order: 3 },
-  { name: 'Node.js', category: 'Backend', level: 90, order: 4 },
-  { name: 'Express', category: 'Backend', level: 90, order: 5 },
-  { name: 'REST APIs', category: 'Backend', level: 93, order: 6 },
-  { name: 'MongoDB', category: 'Database', level: 85, order: 7 },
-  { name: 'PostgreSQL', category: 'Database', level: 78, order: 8 },
-  { name: 'Redis', category: 'Database', level: 70, order: 9 },
-  { name: 'Git & GitHub', category: 'Tools', level: 92, order: 10 },
-  { name: 'Docker', category: 'Tools', level: 75, order: 11 },
-]);
-console.log('🛠️  12 skills created');
+  // --- Skills — from LinkedIn + Facebook ---
+  await Skill.create([
+    { name: 'HTML', category: 'Frontend', level: 95, order: 0 },
+    { name: 'CSS', category: 'Frontend', level: 95, order: 1 },
+    { name: 'JavaScript', category: 'Frontend', level: 92, order: 2 },
+    { name: 'React', category: 'Frontend', level: 90, order: 3 },
+    { name: 'TypeScript', category: 'Frontend', level: 85, order: 4 },
+    { name: 'Tailwind CSS', category: 'Frontend', level: 90, order: 5 },
+    { name: 'Bootstrap', category: 'Frontend', level: 85, order: 6 },
+    { name: 'Node.js', category: 'Backend', level: 85, order: 7 },
+    { name: 'Express', category: 'Backend', level: 82, order: 8 },
+    { name: 'MongoDB', category: 'Database', level: 80, order: 9 },
+    { name: 'Python', category: 'Backend', level: 78, order: 10 },
+    { name: 'Digital Marketing', category: 'Other', level: 85, order: 11 },
+    { name: 'Video Editing', category: 'Other', level: 82, order: 12 },
+    { name: 'Git & GitHub', category: 'Tools', level: 90, order: 13 },
+  ]);
+  console.log('🛠️  14 skills created');
 
-// --- Experience ---
-await Experience.create([
-  {
-    company: 'Northwind Labs',
-    role: 'Senior Full-Stack Developer',
-    startDate: 'Jan 2022',
-    endDate: '',
-    current: true,
-    description:
-      'Leading a team of 4 on the company\'s analytics platform. Rebuilt the reporting pipeline, cutting report generation time by 70%. Own the frontend architecture and mentor junior developers.',
-    order: 0,
-  },
-  {
-    company: 'Pixelforge Studio',
-    role: 'Frontend Developer',
-    startDate: 'Jun 2019',
-    endDate: 'Dec 2021',
-    current: false,
-    description:
-      'Built marketing sites and web apps for agency clients. Shipped 15+ projects, introduced a shared component library that cut build time on new sites nearly in half.',
-    order: 1,
-  },
-]);
-console.log('🏢 2 experiences created');
+  // --- Experience ---
+  await Experience.create([
+    {
+      company: 'Self-Employed',
+      role: 'Freelance Front-End Developer',
+      startDate: 'Jan 2023',
+      endDate: '',
+      current: true,
+      description:
+        'Building websites, e-commerce stores and web apps for clients. Recent work includes a real-time chat app, a 111-product hardware e-commerce site and a business management platform — all designed, built and deployed end to end.',
+      order: 0,
+    },
+    {
+      company: 'Freelance',
+      role: 'Digital Marketer & Video Editor',
+      startDate: 'Jun 2022',
+      endDate: 'Dec 2022',
+      current: false,
+      description:
+        'Grew brands with social media marketing and created engaging video content. Edited promotional videos and product reels for businesses.',
+      order: 1,
+    },
+  ]);
+  console.log('🏢 2 experiences created');
 
-// --- Testimonials ---
-await Testimonial.create([
-  {
-    name: 'Sarah Mitchell',
-    role: 'Product Manager',
-    company: 'Northwind Labs',
-    quote:
-      'Alex is the rare developer who thinks like a product person. He pushed back on features that didn\'t serve users and shipped the ones that did — faster than anyone expected.',
-    avatarUrl: 'https://i.pravatar.cc/200?img=47',
-    order: 0,
-  },
-  {
-    name: 'David Okafor',
-    role: 'Founder',
-    company: 'Nomad Gear',
-    quote:
-      'Our store went from a clunky template to something we\'re genuinely proud of. Conversion is up, support tickets are down, and Alex made the whole process painless.',
-    avatarUrl: 'https://i.pravatar.cc/200?img=59',
-    order: 1,
-  },
-]);
-console.log('💬 2 testimonials created');
+  // No fake testimonials — the section stays empty until real ones are added.
+  console.log('💬 Testimonials skipped (no fake quotes)');
 }
 
 module.exports = seedData;

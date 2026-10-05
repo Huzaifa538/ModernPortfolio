@@ -84,24 +84,42 @@ app.use((req, res) => {
 app.use(errorHandler);
 
 // --- Boot ---
-connectDB()
-  .then(async () => {
-    // Auto-seed on first boot so the demo always has content + an admin login.
-    // (In-memory DB is empty on every restart, so re-seed whenever it's empty.)
-    const adminCount = await User.countDocuments();
-    if (adminCount === 0) {
-      console.log('🌱 Database empty — seeding demo content...');
-      await require('./seed-data')();
-    }
-    app.listen(PORT, () => {
-      console.log('');
-      console.log('🚀 ModernPortfolio API is up');
-      console.log(`   → http://localhost:${PORT}`);
-      console.log(`   → Health check: http://localhost:${PORT}/api/health`);
-      console.log('');
+// In serverless (Vercel), the app is imported — don't listen, just ensure DB.
+// When run directly (node server.js), start the HTTP server as normal.
+let dbReady = null;
+function ensureDB() {
+  if (!dbReady) {
+    dbReady = connectDB().then(async () => {
+      const adminCount = await User.countDocuments();
+      if (adminCount === 0) {
+        console.log('🌱 Database empty — seeding demo content...');
+        await require('./seed-data')();
+      }
     });
-  })
-  .catch((err) => {
-    console.error('❌ Failed to connect to the database:', err.message);
-    process.exit(1);
+  }
+  return dbReady;
+}
+
+// Vercel serverless: export a handler that ensures DB then runs express.
+if (process.env.VERCEL) {
+  const serverlessApp = express();
+  serverlessApp.use((req, res, next) => {
+    ensureDB().then(() => app(req, res, next)).catch(next);
   });
+  module.exports = serverlessApp;
+} else {
+  ensureDB()
+    .then(() => {
+      app.listen(PORT, () => {
+        console.log('');
+        console.log('🚀 ModernPortfolio API is up');
+        console.log(`   → http://localhost:${PORT}`);
+        console.log(`   → Health check: http://localhost:${PORT}/api/health`);
+        console.log('');
+      });
+    })
+    .catch((err) => {
+      console.error('❌ Failed to connect to the database:', err.message);
+      process.exit(1);
+    });
+}

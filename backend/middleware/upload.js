@@ -7,7 +7,9 @@ const multer = require('multer');
 const ALLOWED = /jpe?g|png|webp|svg|pdf/;
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, path.join(__dirname, '..', 'uploads')),
+  // On Vercel serverless the filesystem is read-only except /tmp (ephemeral).
+  // Uploads won't persist there — use image URLs for permanent images.
+  destination: (req, file, cb) => cb(null, process.env.VERCEL ? '/tmp' : path.join(__dirname, '..', 'uploads')),
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
