@@ -13,6 +13,7 @@ import { Experience } from '../components/sections/Experience'
 import { Projects } from '../components/sections/Projects'
 import { Testimonials } from '../components/sections/Testimonials'
 import { Contact } from '../components/sections/Contact'
+import { ChatWidget } from '../components/ChatWidget'
 import { Skeleton } from '../components/ui/Skeleton'
 import { Button } from '../components/ui/Button'
 
@@ -92,6 +93,7 @@ export function PublicPortfolio() {
       )}
 
       <BackToTop />
+      <ChatWidget />
     </>
   )
 }
