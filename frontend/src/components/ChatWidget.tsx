@@ -61,16 +61,15 @@ export function ChatWidget() {
       if (!silent) setLoading(true)
       try {
         const msgs = await api.getConversation(id)
-        setThread((prev) => {
-          // Flag unread when a new admin message arrives while the panel is closed.
-          if (silent && !open && msgs.length > prevCount.current) {
-            const fresh = msgs.slice(prevCount.current)
-            if (fresh.some((m) => m.sender === 'admin')) setHasUnread(true)
-          }
-          prevCount.current = msgs.length
-          return msgs
-        })
-        const firstVisitor = msgs.find((m) => m.sender === 'visitor')
+        // Flag unread when a new admin message arrives while the panel is closed.
+        const prevLen = prevCount.current
+        if (silent && !open && msgs.length > prevLen) {
+          const fresh = msgs.slice(prevLen)
+          if (fresh.some((m) => m.sender === 'admin')) setHasUnread(true)
+        }
+        prevCount.current = msgs.length
+        setThread(msgs)
+        const firstVisitor: ChatMessage | undefined = msgs.find((m) => m.sender === 'visitor')
         if (firstVisitor) {
           if (!visitorName && firstVisitor.name) {
             setVisitorName(firstVisitor.name)
