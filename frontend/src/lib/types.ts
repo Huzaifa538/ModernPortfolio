@@ -120,6 +120,33 @@ export interface ContactPayload {
   message: string
   /** Honeypot — bots fill it, humans don't. */
   website?: string
+  /** Reuse an existing thread instead of starting a new one. */
+  conversationId?: string
+}
+
+/** One message inside a two-way visitor ⇄ admin conversation. */
+export interface ChatMessage {
+  _id?: string
+  conversationId: string
+  sender: 'visitor' | 'admin'
+  name: string
+  email?: string
+  subject?: string
+  message: string
+  isRead: boolean
+  createdAt: string
+}
+
+/** One row of the admin conversation list. `_id` is the conversationId. */
+export interface ConversationSummary {
+  _id: string
+  name: string
+  email: string
+  lastMessage: string
+  lastSender: 'visitor' | 'admin'
+  lastAt: string
+  unreadCount: number
+  totalMessages: number
 }
 
 export type AdminResource = 'projects' | 'skills' | 'experiences' | 'testimonials'

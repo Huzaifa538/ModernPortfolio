@@ -1,15 +1,29 @@
 import axios from 'axios'
-import { useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { motion } from 'framer-motion'
-import { Check, Copy, Github, Linkedin, Mail, MapPin, Phone, Send, Twitter } from 'lucide-react'
+import {
+  Check,
+  Copy,
+  Github,
+  Linkedin,
+  Mail,
+  MapPin,
+  MessageCircle,
+  Phone,
+  Plus,
+  Send,
+  Twitter,
+} from 'lucide-react'
 import toast from 'react-hot-toast'
+import clsx from 'clsx'
 import { SectionHeading } from '../ui/SectionHeading'
 import { Card } from '../ui/Card'
 import { Input } from '../ui/Input'
 import { Textarea } from '../ui/Textarea'
 import { Button } from '../ui/Button'
+import { Skeleton } from '../ui/Skeleton'
 import { api } from '../../lib/api'
-import type { Profile } from '../../lib/types'
+import type { ChatMessage, Profile } from '../../lib/types'
 
 interface FormState {
   name: string
@@ -21,12 +35,139 @@ interface FormState {
 
 const EMPTY: FormState = { name: '', email: '', subject: '', message: '', website: '' }
 
+const CONV_KEY = 'portfolio_conv_id'
+const CONV_NAME_KEY = 'portfolio_conv_name'
+const CONV_EMAIL_KEY = 'portfolio_conv_email'
+
+function chatTime(date: string): string {
+  return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+function ChatBubble({ msg }: { msg: ChatMessage }) {
+  const mine = msg.sender === 'visitor'
+  return (
+    <div className={clsx('flex', mine ? 'justify-end' : 'justify-start')}>
+      <div className={clsx('max-w-[85%] sm:max-w-[75%]', mine ? 'text-right' : 'text-left')}>
+        <div
+          className={clsx(
+            'inline-block whitespace-pre-wrap break-words rounded-2xl px-4 py-2.5 text-sm leading-relaxed',
+            mine
+              ? 'rounded-br-md bg-gradient-to-r from-[#6366f1] to-[#8b5cf6] text-white shadow-md shadow-indigo-500/25'
+              : 'rounded-bl-md border border-[var(--border)] bg-[var(--surface2)] text-[var(--text)]'
+          )}
+        >
+          {msg.message}
+        </div>
+        <p className="font-mono mt-1 text-[11px] text-[var(--muted)]">
+          {mine ? 'You' : msg.name} · {chatTime(msg.createdAt)}
+        </p>
+      </div>
+    </div>
+  )
+}
+
 export function Contact({ profile }: { profile: Profile | null }) {
   const [form, setForm] = useState<FormState>(EMPTY)
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({})
   const [sending, setSending] = useState(false)
   const [copied, setCopied] = useState<string | null>(null)
 
+  // --- Two-way chat state -----------------------------------------------------
+  const [conversationId, setConversationId] = useState<string | null>(() =>
+    typeof window === 'undefined' ? null : localStorage.getItem(CONV_KEY)
+  )
+  const [visitorName, setVisitorName] = useState(
+    () => localStorage.getItem(CONV_NAME_KEY) ?? ''
+  )
+  const [visitorEmail, setVisitorEmail] = useState(
+    () => localStorage.getItem(CONV_EMAIL_KEY) ?? ''
+  )
+  const [thread, setThread] = useState<ChatMessage[]>([])
+  const [chatLoading, setChatLoading] = useState(false)
+  const [chatInput, setChatInput] = useState('')
+  const [chatSending, setChatSending] = useState(false)
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  const loadThread = useCallback(async (id: string, silent = false) => {
+    if (!silent) setChatLoading(true)
+    try {
+      const msgs = await api.getConversation(id)
+      setThread(msgs)
+      // Recover the visitor's identity from the thread so follow-ups stay linked.
+      const firstVisitor = msgs.find((m) => m.sender === 'visitor')
+      if (firstVisitor) {
+        setVisitorName((n) => {
+          const next = n || firstVisitor.name
+          if (next) localStorage.setItem(CONV_NAME_KEY, next)
+          return next
+        })
+        setVisitorEmail((e) => {
+          const next = e || firstVisitor.email || ''
+          if (next) localStorage.setItem(CONV_EMAIL_KEY, next)
+          return next
+        })
+      }
+    } catch {
+      if (!silent) {
+        // The conversation no longer exists — drop back to the contact form.
+        localStorage.removeItem(CONV_KEY)
+        localStorage.removeItem(CONV_NAME_KEY)
+        localStorage.removeItem(CONV_EMAIL_KEY)
+        setConversationId(null)
+        setThread([])
+        toast.error('That conversation has expired — start a new one below.')
+      }
+    } finally {
+      if (!silent) setChatLoading(false)
+    }
+  }, [])
+
+  // Load + poll the open thread every 5 seconds.
+  useEffect(() => {
+    if (!conversationId) return
+    loadThread(conversationId)
+    const timer = window.setInterval(() => loadThread(conversationId, true), 5000)
+    return () => window.clearInterval(timer)
+  }, [conversationId, loadThread])
+
+  // Keep the latest message in view.
+  useEffect(() => {
+    const el = scrollRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [thread])
+
+  const startNewConversation = () => {
+    localStorage.removeItem(CONV_KEY)
+    localStorage.removeItem(CONV_NAME_KEY)
+    localStorage.removeItem(CONV_EMAIL_KEY)
+    setConversationId(null)
+    setThread([])
+    setChatInput('')
+    setForm(EMPTY)
+  }
+
+  const sendFollowUp = async (e: FormEvent) => {
+    e.preventDefault()
+    const text = chatInput.trim()
+    if (!text || chatSending || !conversationId || !visitorName || !visitorEmail) return
+    setChatSending(true)
+    try {
+      await api.sendContact({
+        name: visitorName,
+        email: visitorEmail,
+        message: text,
+        conversationId,
+      })
+      setChatInput('')
+      await loadThread(conversationId, true)
+    } catch {
+      toast.error('Could not send — please try again.')
+    } finally {
+      setChatSending(false)
+    }
+  }
+
+  // --- Original contact form --------------------------------------------------
   const set = (key: keyof FormState) => (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
@@ -62,16 +203,29 @@ export function Contact({ profile }: { profile: Profile | null }) {
 
     setSending(true)
     try {
-      await api.sendContact({
+      const res = await api.sendContact({
         name: form.name.trim(),
         email: form.email.trim(),
         subject: form.subject.trim() || undefined,
         message: form.message.trim(),
         website: form.website || undefined,
       })
-      toast.success("Message sent! I'll get back to you soon.")
-      setForm(EMPTY)
-      setErrors({})
+      if (res.conversationId) {
+        // Switch to the live chat view for this conversation.
+        localStorage.setItem(CONV_KEY, res.conversationId)
+        localStorage.setItem(CONV_NAME_KEY, form.name.trim())
+        localStorage.setItem(CONV_EMAIL_KEY, form.email.trim())
+        setVisitorName(form.name.trim())
+        setVisitorEmail(form.email.trim())
+        setConversationId(res.conversationId)
+        setForm(EMPTY)
+        setErrors({})
+        toast.success('Message sent! You can keep chatting right here.')
+      } else {
+        toast.success("Message sent! I'll get back to you soon.")
+        setForm(EMPTY)
+        setErrors({})
+      }
     } catch (err: unknown) {
       const message =
         axios.isAxiosError<{ error?: string }>(err) ? err.response?.data?.error : undefined
@@ -184,69 +338,145 @@ export function Contact({ profile }: { profile: Profile | null }) {
             )}
           </motion.div>
 
-          {/* Right: the form */}
+          {/* Right: contact form, or the live chat once a conversation exists */}
           <motion.div
             initial={{ opacity: 0, x: 28 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true, margin: '-80px' }}
             transition={{ duration: 0.6 }}
           >
-            <Card className="p-7 sm:p-8">
-              <form onSubmit={handleSubmit} noValidate className="space-y-5">
-                <div className="grid gap-5 sm:grid-cols-2">
-                  <Input
-                    label="Your name"
-                    name="name"
-                    autoComplete="name"
-                    value={form.name}
-                    onChange={set('name')}
-                    error={errors.name}
-                  />
-                  <Input
-                    label="Email address"
-                    name="email"
-                    type="email"
-                    autoComplete="email"
-                    value={form.email}
-                    onChange={set('email')}
-                    error={errors.email}
-                  />
+            {conversationId ? (
+              <Card padded={false} className="flex max-h-[640px] min-h-[480px] flex-col overflow-hidden">
+                {/* Chat header */}
+                <div className="flex items-center gap-3 border-b border-[var(--border)] px-5 py-4">
+                  <span className="relative flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-[#6366f1] to-[#22d3ee] font-display text-sm font-bold text-white">
+                    {profile?.fullName?.charAt(0) ?? 'H'}
+                    <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[var(--bg)] bg-emerald-400" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-semibold">{profile?.fullName ?? 'Huzaifa Adam'}</p>
+                    <p className="text-xs text-[var(--muted)]">Typically replies within a day</p>
+                  </div>
+                  <button
+                    onClick={startNewConversation}
+                    className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium text-[var(--muted)] transition hover:bg-[var(--surface2)] hover:text-[#8b5cf6]"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    New conversation
+                  </button>
                 </div>
-                <Input
-                  label="Subject (optional)"
-                  name="subject"
-                  value={form.subject}
-                  onChange={set('subject')}
-                />
-                <Textarea
-                  label="Your message"
-                  name="message"
-                  value={form.message}
-                  onChange={set('message')}
-                  error={errors.message}
-                />
 
-                {/* Honeypot: invisible to humans, irresistible to bots */}
-                <div className="absolute -left-[9999px] top-auto h-px w-px overflow-hidden" aria-hidden>
-                  <label>
-                    Website
-                    <input
-                      type="text"
-                      name="website"
-                      tabIndex={-1}
-                      autoComplete="off"
-                      value={form.website}
-                      onChange={set('website')}
+                {/* Thread */}
+                <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
+                  {chatLoading ? (
+                    <div className="space-y-4">
+                      <Skeleton className="h-12 w-2/3" />
+                      <Skeleton className="ml-auto h-12 w-1/2" />
+                      <Skeleton className="h-12 w-3/5" />
+                    </div>
+                  ) : thread.length === 0 ? (
+                    <div className="flex h-full flex-col items-center justify-center text-center text-[var(--muted)]">
+                      <MessageCircle className="h-10 w-10 opacity-50" />
+                      <p className="mt-3 text-sm font-medium">Your message is on its way…</p>
+                    </div>
+                  ) : (
+                    thread.map((msg, i) => (
+                      <motion.div
+                        key={`${msg.createdAt}-${i}`}
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.25 }}
+                      >
+                        <ChatBubble msg={msg} />
+                      </motion.div>
+                    ))
+                  )}
+                </div>
+
+                {/* Composer */}
+                <form
+                  onSubmit={sendFollowUp}
+                  className="flex items-end gap-2 border-t border-[var(--border)] px-4 py-4"
+                >
+                  <div className="flex-1">
+                    <Input
+                      label="Type your message…"
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      disabled={chatLoading}
+                      aria-label="Type your message"
                     />
-                  </label>
-                </div>
+                  </div>
+                  <Button
+                    type="submit"
+                    size="md"
+                    loading={chatSending}
+                    disabled={!chatInput.trim()}
+                    aria-label="Send message"
+                    className="shrink-0 !px-4"
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </form>
+              </Card>
+            ) : (
+              <Card className="p-7 sm:p-8">
+                <form onSubmit={handleSubmit} noValidate className="space-y-5">
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <Input
+                      label="Your name"
+                      name="name"
+                      autoComplete="name"
+                      value={form.name}
+                      onChange={set('name')}
+                      error={errors.name}
+                    />
+                    <Input
+                      label="Email address"
+                      name="email"
+                      type="email"
+                      autoComplete="email"
+                      value={form.email}
+                      onChange={set('email')}
+                      error={errors.email}
+                    />
+                  </div>
+                  <Input
+                    label="Subject (optional)"
+                    name="subject"
+                    value={form.subject}
+                    onChange={set('subject')}
+                  />
+                  <Textarea
+                    label="Your message"
+                    name="message"
+                    value={form.message}
+                    onChange={set('message')}
+                    error={errors.message}
+                  />
 
-                <Button type="submit" size="lg" loading={sending} className="w-full sm:w-auto">
-                  <Send className="h-4 w-4" />
-                  {sending ? 'Sending…' : 'Send Message'}
-                </Button>
-              </form>
-            </Card>
+                  {/* Honeypot: invisible to humans, irresistible to bots */}
+                  <div className="absolute -left-[9999px] top-auto h-px w-px overflow-hidden" aria-hidden>
+                    <label>
+                      Website
+                      <input
+                        type="text"
+                        name="website"
+                        tabIndex={-1}
+                        autoComplete="off"
+                        value={form.website}
+                        onChange={set('website')}
+                      />
+                    </label>
+                  </div>
+
+                  <Button type="submit" size="lg" loading={sending} className="w-full sm:w-auto">
+                    <Send className="h-4 w-4" />
+                    {sending ? 'Sending…' : 'Send Message'}
+                  </Button>
+                </form>
+              </Card>
+            )}
           </motion.div>
         </div>
       </div>

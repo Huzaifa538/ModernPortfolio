@@ -2,7 +2,9 @@ import axios, { AxiosError } from 'axios'
 import type {
   AdminResource,
   AuthCredentials,
+  ChatMessage,
   ContactPayload,
+  ConversationSummary,
   Experience,
   LoginResponse,
   MeResponse,
@@ -78,7 +80,11 @@ export const api = {
   getPortfolio: () => unwrap<PortfolioData>(instance.get('/api/public/portfolio')),
   getProject: (slug: string) => unwrap<Project>(instance.get(`/api/public/projects/${slug}`)),
   sendContact: (data: ContactPayload) =>
-    unwrap<{ message: string }>(instance.post('/api/public/contact', data)),
+    unwrap<{ message: string; conversationId?: string }>(
+      instance.post('/api/public/contact', data)
+    ),
+  getConversation: (conversationId: string) =>
+    unwrap<ChatMessage[]>(instance.get(`/api/public/conversation/${conversationId}`)),
 
   // --- Auth -----------------------------------------------------------------
   login: (creds: AuthCredentials) =>
@@ -102,7 +108,17 @@ export const api = {
   reorder: (resource: AdminResource, ids: string[]) =>
     unwrap<{ message: string }>(instance.put(`/api/admin/reorder/${resource}`, { ids })),
 
-  // --- Admin: messages ----------------------------------------------------------
+  // --- Admin: conversations (two-way chat) --------------------------------------------
+  getConversations: () =>
+    unwrap<ConversationSummary[]>(instance.get('/api/admin/conversations')),
+  getConversationThread: (conversationId: string) =>
+    unwrap<ChatMessage[]>(instance.get(`/api/admin/conversations/${conversationId}`)),
+  replyConversation: (conversationId: string, message: string) =>
+    unwrap<ChatMessage>(
+      instance.post(`/api/admin/conversations/${conversationId}/reply`, { message })
+    ),
+
+  // --- Admin: messages (legacy flat inbox — kept for backwards compat) ----------------
   getMessages: (filters: MessageFilters = {}) =>
     unwrap<Message[]>(instance.get('/api/admin/messages', { params: filters })),
   setMessageRead: (id: string, isRead: boolean) =>
