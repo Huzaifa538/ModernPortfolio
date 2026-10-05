@@ -1,8 +1,11 @@
 const mongoose = require('mongoose');
 
-// Messages coming in from the public contact form.
+// Messages: two-way conversations between visitors and the admin.
+// Each conversation is grouped by conversationId (one per visitor).
 const messageSchema = new mongoose.Schema(
   {
+    conversationId: { type: String, required: true, index: true },
+    sender: { type: String, enum: ['visitor', 'admin'], default: 'visitor' },
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, trim: true, lowercase: true },
     subject: String,

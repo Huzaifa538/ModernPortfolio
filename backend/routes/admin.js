@@ -275,7 +275,74 @@ router.put(
   }
 );
 
-// --- Messages (inbox from the contact form) ---
+// --- Conversations (two-way chat: one thread per visitor) ---
+// List all conversations with last message + unread count.
+router.get('/conversations', async (req, res, next) => {
+  try {
+    const convs = await Message.aggregate([
+      { $sort: { createdAt: -1 } },
+      {
+        $group: {
+          _id: '$conversationId',
+          lastMessage: { $first: '$message' },
+          lastSender: { $first: '$sender' },
+          lastAt: { $first: '$createdAt' },
+          name: { $first: '$name' },
+          email: { $first: '$email' },
+          unreadCount: {
+            $sum: { $cond: [{ $and: [{ $eq: ['$sender', 'visitor'] }, { $eq: ['$isRead', false] }] }, 1, 0] },
+          },
+          totalMessages: { $sum: 1 },
+        },
+      },
+      { $sort: { lastAt: -1 } },
+    ]);
+    res.json(convs);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Get all messages in one conversation.
+router.get('/conversations/:conversationId', async (req, res, next) => {
+  try {
+    const messages = await Message.find({ conversationId: req.params.conversationId }).sort({ createdAt: 1 });
+    // Mark visitor messages as read when admin opens the thread.
+    await Message.updateMany(
+      { conversationId: req.params.conversationId, sender: 'visitor', isRead: false },
+      { isRead: true }
+    );
+    res.json(messages);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Admin replies in a conversation.
+router.post(
+  '/conversations/:conversationId/reply',
+  [body('message').trim().isLength({ min: 1, max: 2000 }).withMessage('Message must be 1–2000 characters')],
+  validate,
+  async (req, res, next) => {
+    try {
+      const original = await Message.findOne({ conversationId: req.params.conversationId });
+      if (!original) return res.status(404).json({ error: 'Conversation not found' });
+      const reply = await Message.create({
+        conversationId: req.params.conversationId,
+        sender: 'admin',
+        name: 'Huzaifa Adam',
+        email: original.email,
+        message: req.body.message,
+        isRead: true,
+      });
+      res.status(201).json(reply);
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// --- Messages (legacy inbox — kept for backwards compat) ---
 router.get('/messages', async (req, res, next) => {
   try {
     const filter = {};

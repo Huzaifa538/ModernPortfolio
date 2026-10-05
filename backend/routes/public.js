@@ -55,13 +55,27 @@ router.post(
         return res.status(201).json({ message: 'Message received' }); // honeypot tripped
       }
 
-      const { name, email, subject, message } = req.body;
-      await Message.create({ name, email, subject, message });
-      res.status(201).json({ message: 'Message received' });
+      const { name, email, subject, message, conversationId } = req.body;
+      // Each visitor gets their own conversation. Reuse the ID if they already have one.
+      const cid = conversationId || `conv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const doc = await Message.create({ conversationId: cid, sender: 'visitor', name, email, subject, message });
+      res.status(201).json({ message: 'Message received', conversationId: doc.conversationId });
     } catch (err) {
       next(err);
     }
   }
 );
+
+// GET /api/public/conversation/:conversationId — visitor reads their own thread.
+router.get('/conversation/:conversationId', async (req, res, next) => {
+  try {
+    const messages = await Message.find({ conversationId: req.params.conversationId })
+      .sort({ createdAt: 1 })
+      .select('sender name message createdAt');
+    res.json(messages);
+  } catch (err) {
+    next(err);
+  }
+});
 
 module.exports = router;
