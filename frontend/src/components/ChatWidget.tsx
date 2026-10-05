@@ -68,16 +68,12 @@ export function ChatWidget() {
   const [ready] = useState(() => isFirebaseReady())
   const [authReady, setAuthReady] = useState(false)
   const [open, setOpen] = useState(false)
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
-  const [firstMsg, setFirstMsg] = useState('')
-  const [starting, setStarting] = useState(false)
   const [chatId, setChatId] = useState<string | null>(() =>
     typeof window === 'undefined' ? null : localStorage.getItem(CHAT_KEY)
   )
-  const [visitorName, setVisitorName] = useState('')
   const [messages, setMessages] = useState<LiveMessage[]>([])
   const [loading, setLoading] = useState(false)
+  const [creating, setCreating] = useState(false)
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [adminTyping, setAdminTyping] = useState(false)
@@ -134,16 +130,14 @@ export function ChatWidget() {
       onSnapshot(doc(db, 'portfolio_chats', chatId), (snap) => {
         const data = snap.data() as DocumentData | undefined
         if (!data) {
-          // Chat was deleted — reset to the start form.
+          // Chat was deleted — reset.
           localStorage.removeItem(CHAT_KEY)
           setChatId(null)
           setMessages([])
-          setVisitorName('')
           return
         }
         setAdminTyping(!!data.adminTyping)
         setUnreadVisitor(data.unreadVisitor ?? 0)
-        if (data.name && !visitorName) setVisitorName(data.name)
       })
     )
 
@@ -212,59 +206,59 @@ export function ChatWidget() {
     typingTimer.current = window.setTimeout(() => void setTyping(false), 2000)
   }
 
-  const startConversation = async (e: FormEvent) => {
-    e.preventDefault()
-    if (!db || !authReady) return toast.error('Chat is still connecting — try again in a moment')
-    if (name.trim().length < 2) return toast.error('Please enter your name')
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return toast.error('Enter a valid email')
-    if (firstMsg.trim().length < 3) return toast.error('Write your message')
-    setStarting(true)
+  // Auto-create a chat doc the moment the panel opens (no form — direct chat).
+  const ensureChat = useCallback(async (): Promise<string | null> => {
+    if (chatIdRef.current) return chatIdRef.current
+    if (!db || !authReady || creating) return null
+    setCreating(true)
     try {
       const chatRef = await addDoc(collection(db, 'portfolio_chats'), {
-        name: name.trim(),
-        email: email.trim(),
+        name: 'Visitor',
+        email: '',
         createdAt: serverTimestamp(),
-        lastMessage: firstMsg.trim(),
+        lastMessage: '',
         lastAt: serverTimestamp(),
         lastSender: 'visitor',
-        unreadAdmin: 1,
+        unreadAdmin: 0,
         unreadVisitor: 0,
         visitorTyping: false,
         adminTyping: false,
       })
-      await addDoc(collection(db, 'portfolio_chats', chatRef.id, 'messages'), {
-        sender: 'visitor',
-        name: name.trim(),
-        text: firstMsg.trim(),
-        createdAt: serverTimestamp(),
-        read: false,
-      })
       localStorage.setItem(CHAT_KEY, chatRef.id)
       setChatId(chatRef.id)
-      setVisitorName(name.trim())
-      setFirstMsg('')
-      toast.success('Message sent!')
+      return chatRef.id
     } catch {
-      toast.error('Could not send — try again')
+      toast.error('Could not connect — try again')
+      return null
     } finally {
-      setStarting(false)
+      setCreating(false)
     }
-  }
+  }, [authReady, creating])
+
+  // When the panel opens without a chat, create one in the background.
+  useEffect(() => {
+    if (open && !chatIdRef.current && db && authReady && !creating) {
+      void ensureChat()
+    }
+  }, [open, authReady, creating, ensureChat])
 
   const sendFollowUp = async (e: FormEvent) => {
     e.preventDefault()
     const text = input.trim()
-    if (!text || sending || !db || !chatId || !visitorName) return
+    if (!text || sending || !db) return
+    // Make sure a chat exists (creates one on the very first message).
+    const id = chatIdRef.current ?? (await ensureChat())
+    if (!id) return
     setSending(true)
     try {
-      await addDoc(collection(db, 'portfolio_chats', chatId, 'messages'), {
+      await addDoc(collection(db, 'portfolio_chats', id, 'messages'), {
         sender: 'visitor',
-        name: visitorName,
+        name: 'Visitor',
         text,
         createdAt: serverTimestamp(),
         read: false,
       })
-      await updateDoc(doc(db, 'portfolio_chats', chatId), {
+      await updateDoc(doc(db, 'portfolio_chats', id), {
         lastMessage: text,
         lastAt: serverTimestamp(),
         lastSender: 'visitor',
@@ -284,11 +278,7 @@ export function ChatWidget() {
     localStorage.removeItem(CHAT_KEY)
     setChatId(null)
     setMessages([])
-    setVisitorName('')
     setInput('')
-    setName('')
-    setEmail('')
-    setFirstMsg('')
     setUnreadVisitor(0)
   }
 
@@ -344,52 +334,18 @@ export function ChatWidget() {
               </button>
             </div>
 
-            {!chatId ? (
-              /* First-time form */
-              <form onSubmit={startConversation} className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
-                <p className="text-sm text-[var(--muted)]">
-                  Drop me a message and I'll get back to you right here — live.
-                </p>
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Your name"
-                  className="rounded-xl border border-[var(--border)] bg-[var(--surface2)] px-3.5 py-2.5 text-sm text-[var(--text)] outline-none placeholder:text-[var(--muted)] focus:border-[#6366f1]"
-                />
-                <input
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Your email"
-                  type="email"
-                  className="rounded-xl border border-[var(--border)] bg-[var(--surface2)] px-3.5 py-2.5 text-sm text-[var(--text)] outline-none placeholder:text-[var(--muted)] focus:border-[#6366f1]"
-                />
-                <textarea
-                  value={firstMsg}
-                  onChange={(e) => setFirstMsg(e.target.value)}
-                  placeholder="Hi Huzaifa, I wanted to talk about…"
-                  rows={4}
-                  className="flex-1 resize-none rounded-xl border border-[var(--border)] bg-[var(--surface2)] px-3.5 py-2.5 text-sm text-[var(--text)] outline-none placeholder:text-[var(--muted)] focus:border-[#6366f1]"
-                />
-                <button
-                  type="submit"
-                  disabled={starting || !authReady}
-                  className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#6366f1] to-[#8b5cf6] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
-                >
-                  <Send size={16} />
-                  {starting ? 'Sending…' : authReady ? 'Start chatting' : 'Connecting…'}
-                </button>
-              </form>
-            ) : (
-              /* Thread view */
-              <>
-                <div ref={scrollRef} className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
-                  {loading ? (
-                    <p className="py-8 text-center text-sm text-[var(--muted)]">Loading…</p>
-                  ) : messages.length === 0 ? (
-                    <p className="py-8 text-center text-sm text-[var(--muted)]">Say hello! 👋</p>
-                  ) : (
-                    messages.map((m) => <Bubble key={m.id} msg={m} />)
-                  )}
+            {/* Direct live chat — no form, just type and send */}
+            <div ref={scrollRef} className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
+              {loading || creating || !authReady ? (
+                <p className="py-8 text-center text-sm text-[var(--muted)]">Connecting…</p>
+              ) : messages.length === 0 ? (
+                <div className="py-8 text-center">
+                  <p className="text-sm text-[var(--muted)]">Say hello! 👋</p>
+                  <p className="mt-1 text-xs text-[var(--muted)]">Huzaifa will reply here live.</p>
+                </div>
+              ) : (
+                messages.map((m) => <Bubble key={m.id} msg={m} />)
+              )}
                   {adminTyping && (
                     <div className="flex justify-start">
                       <div className="rounded-2xl rounded-bl-md border border-[var(--border)] bg-[var(--surface2)] px-4 py-2.5">
@@ -429,8 +385,6 @@ export function ChatWidget() {
                 >
                   Start a new conversation
                 </button>
-              </>
-            )}
           </motion.div>
         )}
       </AnimatePresence>
