@@ -1,1 +1,1 @@
-{"builds":[{"src":"api/index.js","use":"@vercel/node"}],"routes":[{"dest":"/api/index.js","src":"/(.*)"}],"version":2}
+{"functions":{"api/index.js":{"region":"bom1"}},"rewrites":[{"destination":"/api/index.js","source":"/(.*)"}]}

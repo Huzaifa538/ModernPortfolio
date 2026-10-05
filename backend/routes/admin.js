@@ -9,11 +9,25 @@ const Message = require('../models/Message');
 const auth = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const upload = require('../middleware/upload');
+const { clearPortfolioCache } = require('./public');
 
 const router = express.Router();
 
 // Everything in this file needs a valid admin token.
 router.use(auth);
+
+// Any admin change (profile, projects, skills…) invalidates the cached
+// public portfolio response so visitors see fresh data within seconds.
+router.use((req, res, next) => {
+  if (req.method !== 'GET') {
+    const originalJson = res.json.bind(res);
+    res.json = (body) => {
+      clearPortfolioCache();
+      return originalJson(body);
+    };
+  }
+  next();
+});
 
 // Tiny helper: "My Cool App!" -> "my-cool-app"
 function slugify(text) {

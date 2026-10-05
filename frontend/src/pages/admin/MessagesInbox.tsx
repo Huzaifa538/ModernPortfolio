@@ -19,7 +19,7 @@ import {
   type DocumentData,
   type Timestamp,
 } from 'firebase/firestore'
-import { onAuthStateChanged } from 'firebase/auth'
+import { onAuthStateChanged, signInAnonymously } from 'firebase/auth'
 import { auth, db, isFirebaseReady } from '../../lib/firebase'
 import { Card } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
@@ -91,9 +91,21 @@ export function MessagesInbox() {
   const selectedIdRef = useRef<string | null>(null)
   selectedIdRef.current = selectedId
 
+  // The admin logs in with the backend (JWT), not Firebase — so silently
+  // sign in to Firebase anonymously if needed. Firestore rules just need
+  // *any* authenticated user for the inbox to connect.
   useEffect(() => {
     if (!ready || !auth) return
-    const unsub = onAuthStateChanged(auth, (user) => setAuthReady(!!user))
+    const authInstance = auth
+    const unsub = onAuthStateChanged(authInstance, (user) => {
+      if (user) {
+        setAuthReady(true)
+      } else {
+        signInAnonymously(authInstance)
+          .then(() => setAuthReady(true))
+          .catch(() => setAuthReady(false))
+      }
+    })
     return unsub
   }, [ready])
 

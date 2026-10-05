@@ -79,14 +79,15 @@ export function ChatWidget() {
   const chatIdRef = useRef<string | null>(null)
   chatIdRef.current = chatId
 
-  // Track Google auth state.
+  // Track Google auth state. Anonymous Firebase sessions (used by the admin
+  // inbox) don't count — the widget needs a real Google sign-in.
   useEffect(() => {
     if (!ready || !auth) {
       setAuthChecking(false)
       return
     }
     const unsub = onAuthStateChanged(auth, (u) => {
-      setUser(u)
+      setUser(u && !u.isAnonymous ? u : null)
       setAuthChecking(false)
     })
     return unsub

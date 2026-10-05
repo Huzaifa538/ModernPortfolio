@@ -10,9 +10,19 @@ const validate = require('../middleware/validate');
 
 const router = express.Router();
 
+// Portfolio content changes rarely (only from the admin panel), so cache the
+// assembled response in memory for 60s — repeat visits skip MongoDB entirely.
+let portfolioCache = null;
+let portfolioCacheAt = 0;
+const PORTFOLIO_TTL_MS = 60 * 1000;
+
 // GET /api/public/portfolio — everything the site needs in one call
 router.get('/portfolio', async (req, res, next) => {
   try {
+    if (portfolioCache && Date.now() - portfolioCacheAt < PORTFOLIO_TTL_MS) {
+      res.set('Cache-Control', 'public, max-age=60');
+      return res.json(portfolioCache);
+    }
     const [profile, projects, skills, experiences, testimonials] = await Promise.all([
       Profile.findOne(),
       Project.find().sort({ order: 1, createdAt: -1 }),
@@ -20,7 +30,10 @@ router.get('/portfolio', async (req, res, next) => {
       Experience.find().sort({ order: 1 }),
       Testimonial.find().sort({ order: 1 }),
     ]);
-    res.json({ profile, projects, skills, experiences, testimonials });
+    portfolioCache = { profile, projects, skills, experiences, testimonials };
+    portfolioCacheAt = Date.now();
+    res.set('Cache-Control', 'public, max-age=60');
+    res.json(portfolioCache);
   } catch (err) {
     next(err);
   }
@@ -79,3 +92,7 @@ router.get('/conversation/:conversationId', async (req, res, next) => {
 });
 
 module.exports = router;
+module.exports.clearPortfolioCache = () => {
+  portfolioCache = null;
+  portfolioCacheAt = 0;
+};
