@@ -1,5 +1,5 @@
 import { useRef, type ReactNode } from 'react'
-import { motion, useScroll, useTransform } from 'framer-motion'
+import { motion, useScroll, useTransform, useInView } from 'framer-motion'
 import { useReducedMotion } from '../../hooks/useReducedMotion'
 
 interface SectionFlipProps {
@@ -24,13 +24,20 @@ const EASE = [0.22, 1, 0.36, 1] as const
  *
  * The entrance flip runs at FULL opacity (no fade) so the page-turn is
  * unmistakable: the section starts edge-on (-90deg, invisible) and swings
- * down into place. Two nested motion layers so the entry flip and the
- * scroll tilt never fight over the same transform: the outer handles scroll
- * lean, the inner handles the one-time entrance flip.
+ * down into place.
+ *
+ * Visibility is observed on the OUTER wrapper (a stable layout box with no
+ * entrance transform) and driven via `animate`, so the reveal can never get
+ * stuck if the inner 3D transform confuses in-view detection. The outer
+ * handles scroll lean, the inner handles the one-time entrance flip — the
+ * two never fight over the same transform.
  */
 export function SectionFlip({ children, className, flip = 'down', delay = 0 }: SectionFlipProps) {
   const reduceMotion = useReducedMotion()
   const ref = useRef<HTMLDivElement>(null)
+
+  // Observe the outer wrapper: stable box, no entrance transform.
+  const inView = useInView(ref, { once: true, margin: '-60px' })
 
   // While the section moves through the viewport it leans a few degrees,
   // so the page feels like it has real depth instead of sliding flat.
@@ -56,8 +63,7 @@ export function SectionFlip({ children, className, flip = 'down', delay = 0 }: S
       <motion.div
         style={{ transformPerspective: 1400, transformOrigin: origin }}
         initial={reduceMotion ? { opacity: 0 } : { rotateX: fromAngle }}
-        whileInView={{ opacity: 1, rotateX: 0 }}
-        viewport={{ once: true, margin: '-40px' }}
+        animate={inView ? { opacity: 1, rotateX: 0 } : undefined}
         transition={{ duration: 1.1, delay, ease: EASE }}
       >
         {children}
