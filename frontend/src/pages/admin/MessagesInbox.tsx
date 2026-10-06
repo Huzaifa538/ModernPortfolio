@@ -79,6 +79,8 @@ function initials(name: string): string {
 export function MessagesInbox() {
   const [ready] = useState(() => isFirebaseReady())
   const [authReady, setAuthReady] = useState(false)
+  const [authError, setAuthError] = useState<string | null>(null)
+  const [authSlow, setAuthSlow] = useState(false)
   const [chats, setChats] = useState<LiveChat[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -94,20 +96,58 @@ export function MessagesInbox() {
   // The admin logs in with the backend (JWT), not Firebase — so silently
   // sign in to Firebase anonymously if needed. Firestore rules just need
   // *any* authenticated user for the inbox to connect.
+  // A 20s watchdog turns a silent hang into a visible error with a retry,
+  // so a blocked or very slow network never leaves the inbox stuck on
+  // "Connecting to live chat…" forever.
   useEffect(() => {
     if (!ready || !auth) return
     const authInstance = auth
+    let cancelled = false
+    const watchdog = window.setTimeout(() => {
+      if (!cancelled) setAuthSlow(true)
+    }, 20000)
     const unsub = onAuthStateChanged(authInstance, (user) => {
+      if (cancelled) return
       if (user) {
+        window.clearTimeout(watchdog)
+        setAuthSlow(false)
+        setAuthError(null)
         setAuthReady(true)
       } else {
-        signInAnonymously(authInstance)
-          .then(() => setAuthReady(true))
-          .catch(() => setAuthReady(false))
+        setAuthError(null)
+        setAuthSlow(false)
+        signInAnonymously(authInstance).catch((err: unknown) => {
+          if (cancelled) return
+          window.clearTimeout(watchdog)
+          setAuthError(
+            err instanceof Error ? err.message : 'Could not reach the chat service'
+          )
+        })
       }
     })
-    return unsub
+    return () => {
+      cancelled = true
+      window.clearTimeout(watchdog)
+      unsub()
+    }
   }, [ready])
+
+  const retryAuth = useCallback(() => {
+    if (!auth) return
+    setAuthError(null)
+    setAuthSlow(false)
+    signInAnonymously(auth)
+      .then(() => {
+        setAuthSlow(false)
+        setAuthError(null)
+        setAuthReady(true)
+      })
+      .catch((err: unknown) =>
+        setAuthError(
+          err instanceof Error ? err.message : 'Could not reach the chat service'
+        )
+      )
+  }, [])
 
   // --- Real-time chat list -----------------------------------------------------
   useEffect(() => {
@@ -295,6 +335,17 @@ export function MessagesInbox() {
       {!authReady && (
         <Card>
           <p className="text-sm text-[var(--muted)]">Connecting to live chat…</p>
+          {(authSlow || authError) && (
+            <div className="mt-3 space-y-3">
+              <p className="text-sm text-red-400">
+                {authError ??
+                  'Still connecting — your network may be slow or blocking the chat service.'}
+              </p>
+              <Button variant="outline" size="sm" onClick={retryAuth}>
+                Retry connection
+              </Button>
+            </div>
+          )}
         </Card>
       )}
 

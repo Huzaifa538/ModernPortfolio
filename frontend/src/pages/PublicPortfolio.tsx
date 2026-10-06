@@ -1,3 +1,4 @@
+import { Suspense, lazy } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
 import { usePortfolio } from '../hooks/usePortfolio'
@@ -13,7 +14,11 @@ import { Experience } from '../components/sections/Experience'
 import { Projects } from '../components/sections/Projects'
 import { Testimonials } from '../components/sections/Testimonials'
 import { Contact } from '../components/sections/Contact'
-import { ChatWidget } from '../components/ChatWidget'
+// The chat widget pulls in the whole Firebase SDK — load it lazily so the
+// first paint isn't held up by ~400KB of chat code the visitor may never open.
+const ChatWidget = lazy(() =>
+  import('../components/ChatWidget').then((m) => ({ default: m.ChatWidget }))
+)
 import { Skeleton } from '../components/ui/Skeleton'
 import { Button } from '../components/ui/Button'
 
@@ -93,7 +98,9 @@ export function PublicPortfolio() {
       )}
 
       <BackToTop />
-      <ChatWidget />
+      <Suspense fallback={null}>
+        <ChatWidget />
+      </Suspense>
     </>
   )
 }
