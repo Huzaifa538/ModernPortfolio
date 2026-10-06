@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useInView } from 'framer-motion'
 import { Briefcase, FolderKanban, Mail, MapPin, Phone, Smile } from 'lucide-react'
 import { SectionHeading } from '../ui/SectionHeading'
+import { SectionFlip } from '../ui/SectionFlip'
 import { Card } from '../ui/Card'
 import { Reveal } from '../ui/Reveal'
 import { resolveAssetUrl } from '../../lib/api'
@@ -74,6 +75,7 @@ export function About({ profile }: { profile: Profile | null }) {
 
   return (
     <section id="about" className="relative py-24 sm:py-32">
+      <SectionFlip flip="down">
       <div className="mx-auto max-w-6xl px-6">
         <SectionHeading
           label="about"
@@ -139,6 +141,7 @@ export function About({ profile }: { profile: Profile | null }) {
           </Card>
         </div>
       </div>
+      </SectionFlip>
     </section>
   )
 }

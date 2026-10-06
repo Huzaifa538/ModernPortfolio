@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { ExternalLink, FolderKanban, Github, Star } from 'lucide-react'
 import clsx from 'clsx'
 import { SectionHeading } from '../ui/SectionHeading'
+import { SectionFlip } from '../ui/SectionFlip'
 import { Card } from '../ui/Card'
 import { Badge } from '../ui/Badge'
 import { Skeleton } from '../ui/Skeleton'
@@ -26,7 +27,7 @@ function ProjectCard({ project, index, onOpen }: { project: Project; index: numb
       transition={{ duration: 0.5, delay: Math.min(index * 0.05, 0.3), ease: 'easeOut' }}
     >
       <TiltCard
-        maxTilt={7}
+        maxTilt={10}
         wrapperClassName="h-full"
         onClick={onOpen}
         role="button"
@@ -136,6 +137,7 @@ export function Projects({ projects, loading }: ProjectsProps) {
 
   return (
     <section id="projects" className="relative py-24 sm:py-32 bg-[var(--bg-soft)]">
+      <SectionFlip flip="up">
       <div className="mx-auto max-w-6xl px-6">
         <SectionHeading
           label="projects"
@@ -186,6 +188,8 @@ export function Projects({ projects, loading }: ProjectsProps) {
           )}
         </div>
       </div>
+
+      </SectionFlip>
 
       <ProjectModal project={selected} onClose={() => setSelected(null)} />
     </section>

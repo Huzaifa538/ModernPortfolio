@@ -2,6 +2,7 @@ import { motion } from 'framer-motion'
 import { BriefcaseBusiness } from 'lucide-react'
 import clsx from 'clsx'
 import { SectionHeading } from '../ui/SectionHeading'
+import { SectionFlip } from '../ui/SectionFlip'
 import { Card } from '../ui/Card'
 import { Badge } from '../ui/Badge'
 import { Skeleton } from '../ui/Skeleton'
@@ -25,6 +26,7 @@ export function Experience({ experiences, loading }: ExperienceProps) {
 
   return (
     <section id="experience" className="relative py-24 sm:py-32">
+      <SectionFlip flip="down">
       <div className="mx-auto max-w-4xl px-6">
         <SectionHeading
           label="experience"
@@ -112,6 +114,7 @@ export function Experience({ experiences, loading }: ExperienceProps) {
           )}
         </div>
       </div>
+      </SectionFlip>
     </section>
   )
 }

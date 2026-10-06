@@ -57,9 +57,11 @@ export function Hero({ profile }: HeroProps) {
     target: sectionRef,
     offset: ['start start', 'end start'],
   })
-  const bgY = useTransform(scrollYProgress, [0, 1], [0, 140])
-  const contentY = useTransform(scrollYProgress, [0, 1], [0, -64])
+  const bgY = useTransform(scrollYProgress, [0, 1], [0, 220])
+  const contentY = useTransform(scrollYProgress, [0, 1], [0, -110])
   const contentOpacity = useTransform(scrollYProgress, [0, 0.8], [1, 0])
+  // As the hero scrolls away it tips backward in 3D, like a page lifting off.
+  const contentTilt = useTransform(scrollYProgress, [0, 1], [0, 9])
 
   const socials = [
     profile?.githubUrl && { href: profile.githubUrl, label: 'GitHub', icon: Github },
@@ -89,7 +91,11 @@ export function Hero({ profile }: HeroProps) {
       />
 
       <motion.div
-        style={reduceMotion ? undefined : { y: contentY, opacity: contentOpacity }}
+        style={
+          reduceMotion
+            ? undefined
+            : { y: contentY, opacity: contentOpacity, rotateX: contentTilt, transformPerspective: 1200 }
+        }
         className="relative z-10 mx-auto grid w-full max-w-6xl items-center gap-14 px-6 pb-24 pt-28 lg:grid-cols-[1.15fr_0.85fr] lg:pt-32"
       >
         {/* Copy */}
@@ -132,7 +138,7 @@ export function Hero({ profile }: HeroProps) {
                   <motion.span
                     className={`inline-block ${last ? 'text-gradient' : ''}`}
                     style={{ transformPerspective: 600 }}
-                    initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: '110%', rotateX: -65 }}
+                    initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: '110%', rotateX: -80 }}
                     animate={{ opacity: 1, y: '0%', rotateX: 0 }}
                     transition={{ duration: 0.75, delay: 0.14 + i * 0.08, ease: [0.22, 1, 0.36, 1] }}
                   >

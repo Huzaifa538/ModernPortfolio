@@ -17,6 +17,7 @@ import {
 import toast from 'react-hot-toast'
 import clsx from 'clsx'
 import { SectionHeading } from '../ui/SectionHeading'
+import { SectionFlip } from '../ui/SectionFlip'
 import { Card } from '../ui/Card'
 import { Input } from '../ui/Input'
 import { Textarea } from '../ui/Textarea'
@@ -269,6 +270,7 @@ export function Contact({ profile }: { profile: Profile | null }) {
         <div className="aurora-blob aurora-2" />
       </div>
 
+      <SectionFlip flip="up">
       <div className="relative mx-auto max-w-6xl px-6">
         <SectionHeading
           label="contact"
@@ -473,6 +475,7 @@ export function Contact({ profile }: { profile: Profile | null }) {
           </Reveal>
         </div>
       </div>
+      </SectionFlip>
     </section>
   )
 }

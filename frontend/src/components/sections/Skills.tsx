@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { Code2 } from 'lucide-react'
 import clsx from 'clsx'
 import { SectionHeading } from '../ui/SectionHeading'
+import { SectionFlip } from '../ui/SectionFlip'
 import { Card } from '../ui/Card'
 import { Skeleton } from '../ui/Skeleton'
 import { useReducedMotion } from '../../hooks/useReducedMotion'
@@ -65,6 +66,7 @@ export function Skills({ skills, loading }: SkillsProps) {
 
   return (
     <section id="skills" className="relative py-24 sm:py-32 bg-[var(--bg-soft)]">
+      <SectionFlip flip="up">
       <div className="mx-auto max-w-6xl px-6">
         <SectionHeading
           label="skills"
@@ -118,7 +120,7 @@ export function Skills({ skills, loading }: SkillsProps) {
                   viewport={{ once: true, margin: '-60px' }}
                   transition={{ duration: 0.55, delay: Math.min(i * 0.06, 0.36), ease: 'easeOut' }}
                 >
-                  <TiltCard maxTilt={6} wrapperClassName="h-full" className="h-full">
+                  <TiltCard maxTilt={10} wrapperClassName="h-full" className="h-full">
                     <Card hover padded className="p-5 h-full">
                       <div className="flex items-center justify-between gap-3">
                         <h3 className="font-display font-semibold">{skill.name}</h3>
@@ -140,6 +142,7 @@ export function Skills({ skills, loading }: SkillsProps) {
       </div>
 
       <SkillMarquee skills={skills} />
+      </SectionFlip>
     </section>
   )
 }

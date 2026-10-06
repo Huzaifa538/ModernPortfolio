@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { ChevronLeft, ChevronRight, MessageSquareHeart, Quote } from 'lucide-react'
 import clsx from 'clsx'
 import { SectionHeading } from '../ui/SectionHeading'
+import { SectionFlip } from '../ui/SectionFlip'
 import { Card } from '../ui/Card'
 import { Skeleton } from '../ui/Skeleton'
 import { TiltCard } from '../ui/TiltCard'
@@ -44,6 +45,7 @@ export function Testimonials({ testimonials, loading }: TestimonialsProps) {
 
   return (
     <section id="testimonials" className="relative py-24 sm:py-32">
+      <SectionFlip flip="down">
       <div className="mx-auto max-w-4xl px-6">
         <SectionHeading
           label="testimonials"
@@ -66,7 +68,7 @@ export function Testimonials({ testimonials, loading }: TestimonialsProps) {
               className="relative"
               style={{ perspective: 1200 }}
             >
-              <TiltCard maxTilt={4} glare={false} lift={false} wrapperClassName="relative">
+              <TiltCard maxTilt={8} glare={false} lift={false} wrapperClassName="relative">
               <Card padded={false} className="relative overflow-hidden p-8 sm:p-12">
                 <Quote
                   aria-hidden
@@ -154,6 +156,7 @@ export function Testimonials({ testimonials, loading }: TestimonialsProps) {
           )}
         </div>
       </div>
+      </SectionFlip>
     </section>
   )
 }
