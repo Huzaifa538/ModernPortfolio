@@ -5,6 +5,7 @@ import clsx from 'clsx'
 import { SectionHeading } from '../ui/SectionHeading'
 import { Card } from '../ui/Card'
 import { Skeleton } from '../ui/Skeleton'
+import { TiltCard } from '../ui/TiltCard'
 import { resolveAssetUrl } from '../../lib/api'
 import { useReducedMotion } from '../../hooks/useReducedMotion'
 import type { Testimonial } from '../../lib/types'
@@ -63,7 +64,9 @@ export function Testimonials({ testimonials, loading }: TestimonialsProps) {
               onMouseEnter={() => setPaused(true)}
               onMouseLeave={() => setPaused(false)}
               className="relative"
+              style={{ perspective: 1200 }}
             >
+              <TiltCard maxTilt={4} glare={false} lift={false} wrapperClassName="relative">
               <Card padded={false} className="relative overflow-hidden p-8 sm:p-12">
                 <Quote
                   aria-hidden
@@ -72,10 +75,11 @@ export function Testimonials({ testimonials, loading }: TestimonialsProps) {
                 <AnimatePresence mode="wait">
                   <motion.figure
                     key={current._id}
-                    initial={reduceMotion ? undefined : { opacity: 0, x: 32 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={reduceMotion ? undefined : { opacity: 0, x: -32 }}
-                    transition={{ duration: 0.4 }}
+                    style={{ transformPerspective: 1000 }}
+                    initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: 56, rotateY: -16 }}
+                    animate={{ opacity: 1, x: 0, rotateY: 0 }}
+                    exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: -56, rotateY: 16 }}
+                    transition={{ duration: 0.45, ease: 'easeOut' }}
                     className="relative"
                   >
                     <blockquote className="text-lg leading-relaxed text-[var(--text)] sm:text-xl">
@@ -106,6 +110,7 @@ export function Testimonials({ testimonials, loading }: TestimonialsProps) {
                   </motion.figure>
                 </AnimatePresence>
               </Card>
+              </TiltCard>
 
               {/* Arrows */}
               {testimonials.length > 1 && (

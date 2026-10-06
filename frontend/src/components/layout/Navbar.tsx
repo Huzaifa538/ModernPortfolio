@@ -69,17 +69,22 @@ export function Navbar({ name }: { name?: string }) {
                 key={link.id}
                 onClick={() => goTo(link.id)}
                 className={clsx(
-                  'relative rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                  'group relative rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                   active === link.id
                     ? 'text-[var(--text)]'
                     : 'text-[var(--muted)] hover:text-[var(--text)]'
                 )}
               >
                 {link.label}
-                {active === link.id && (
+                {active === link.id ? (
                   <motion.span
                     layoutId="nav-underline"
                     className="absolute inset-x-3 -bottom-0.5 h-0.5 rounded-full bg-gradient-to-r from-[#6366f1] to-[#22d3ee]"
+                  />
+                ) : (
+                  <span
+                    aria-hidden
+                    className="absolute inset-x-3 -bottom-0.5 h-0.5 origin-left scale-x-0 rounded-full bg-gradient-to-r from-[#6366f1]/70 to-[#22d3ee]/70 transition-transform duration-300 group-hover:scale-x-100"
                   />
                 )}
               </button>

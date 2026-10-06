@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { motion, useInView } from 'framer-motion'
+import { useInView } from 'framer-motion'
 import { Briefcase, FolderKanban, Mail, MapPin, Phone, Smile } from 'lucide-react'
 import { SectionHeading } from '../ui/SectionHeading'
 import { Card } from '../ui/Card'
+import { Reveal } from '../ui/Reveal'
 import { resolveAssetUrl } from '../../lib/api'
 import { useReducedMotion } from '../../hooks/useReducedMotion'
 import type { Profile } from '../../lib/types'
@@ -82,13 +83,7 @@ export function About({ profile }: { profile: Profile | null }) {
 
         <div className="mt-14 grid items-center gap-12 lg:grid-cols-[0.9fr_1.1fr]">
           {/* Tilted portrait */}
-          <motion.div
-            initial={{ opacity: 0, x: -28 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true, margin: '-80px' }}
-            transition={{ duration: 0.65 }}
-            className="relative mx-auto w-full max-w-xs"
-          >
+          <Reveal className="relative mx-auto w-full max-w-xs" distance={44}>
             <div
               className="absolute inset-0 translate-x-4 translate-y-4 rotate-3 rounded-3xl bg-gradient-to-br from-[#6366f1] to-[#22d3ee] opacity-60"
               aria-hidden
@@ -104,15 +99,10 @@ export function About({ profile }: { profile: Profile | null }) {
                 </div>
               )}
             </div>
-          </motion.div>
+          </Reveal>
 
           {/* Bio + contact rows */}
-          <motion.div
-            initial={{ opacity: 0, x: 28 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true, margin: '-80px' }}
-            transition={{ duration: 0.65 }}
-          >
+          <Reveal delay={0.12} distance={44}>
             <h3 className="font-display text-2xl font-bold">
               Hi, I'm <span className="text-gradient">{name}</span>
             </h3>
@@ -135,7 +125,7 @@ export function About({ profile }: { profile: Profile | null }) {
                 </div>
               ))}
             </div>
-          </motion.div>
+          </Reveal>
         </div>
 
         {/* Counters */}

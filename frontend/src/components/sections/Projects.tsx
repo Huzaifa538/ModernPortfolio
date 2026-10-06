@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type MouseEvent } from 'react'
+import { useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ExternalLink, FolderKanban, Github, Star } from 'lucide-react'
 import clsx from 'clsx'
@@ -6,46 +6,34 @@ import { SectionHeading } from '../ui/SectionHeading'
 import { Card } from '../ui/Card'
 import { Badge } from '../ui/Badge'
 import { Skeleton } from '../ui/Skeleton'
+import { TiltCard } from '../ui/TiltCard'
 import { ProjectModal } from './ProjectModal'
 import { resolveAssetUrl } from '../../lib/api'
 import { useReducedMotion } from '../../hooks/useReducedMotion'
 import type { Project } from '../../lib/types'
 
-function TiltCard({ project, onOpen }: { project: Project; onOpen: () => void }) {
-  const ref = useRef<HTMLDivElement>(null)
+function ProjectCard({ project, index, onOpen }: { project: Project; index: number; onOpen: () => void }) {
   const reduceMotion = useReducedMotion()
-  const [tilt, setTilt] = useState({ rx: 0, ry: 0 })
-
-  const onMouseMove = (e: MouseEvent<HTMLDivElement>) => {
-    if (reduceMotion || !ref.current) return
-    const rect = ref.current.getBoundingClientRect()
-    const px = (e.clientX - rect.left) / rect.width - 0.5
-    const py = (e.clientY - rect.top) / rect.height - 0.5
-    setTilt({ rx: -py * 7, ry: px * 9 })
-  }
-
   const image = resolveAssetUrl(project.imageUrl)
 
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.95 }}
-      transition={{ duration: 0.35 }}
-      style={{ perspective: 900 }}
+      style={{ transformPerspective: 900 }}
+      initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 44, rotateX: 12 }}
+      animate={{ opacity: 1, y: 0, rotateX: 0 }}
+      exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.94, rotateX: -8 }}
+      transition={{ duration: 0.5, delay: Math.min(index * 0.05, 0.3), ease: 'easeOut' }}
     >
-      <div
-        ref={ref}
-        onMouseMove={onMouseMove}
-        onMouseLeave={() => setTilt({ rx: 0, ry: 0 })}
+      <TiltCard
+        maxTilt={7}
+        wrapperClassName="h-full"
         onClick={onOpen}
         role="button"
         tabIndex={0}
         onKeyDown={(e) => e.key === 'Enter' && onOpen()}
         aria-label={`Open details for ${project.title}`}
-        style={{ transform: `rotateX(${tilt.rx}deg) rotateY(${tilt.ry}deg)` }}
-        className="glass group h-full cursor-pointer overflow-hidden rounded-2xl transition-[transform,box-shadow,border-color] duration-300 hover:-translate-y-1.5 hover:border-[#8b5cf6]/40 hover:shadow-[0_24px_60px_-20px_rgba(99,102,241,0.35)]"
+        className="glass group h-full cursor-pointer overflow-hidden rounded-2xl transition-[box-shadow,border-color] duration-300 hover:border-[#8b5cf6]/40 hover:shadow-[0_24px_60px_-20px_rgba(99,102,241,0.35)]"
       >
         {/* Cover image */}
         <div className="relative aspect-video overflow-hidden bg-[var(--surface2)]">
@@ -121,7 +109,7 @@ function TiltCard({ project, onOpen }: { project: Project; onOpen: () => void })
             </div>
           )}
         </div>
-      </div>
+      </TiltCard>
     </motion.div>
   )
 }
@@ -157,19 +145,21 @@ export function Projects({ projects, loading }: ProjectsProps) {
 
         <div className="mt-10 flex flex-wrap justify-center gap-2.5">
           {categories.map((cat) => (
-            <button
+            <motion.button
               key={cat}
               onClick={() => setCategory(cat)}
               aria-pressed={category === cat}
+              whileTap={{ scale: 0.93 }}
+              transition={{ type: 'spring', stiffness: 500, damping: 22 }}
               className={clsx(
-                'rounded-full px-5 py-2 text-sm font-medium transition-all duration-300',
+                'rounded-full px-5 py-2 text-sm font-medium transition-[box-shadow,border-color,background-color,color] duration-300',
                 category === cat
                   ? 'bg-gradient-to-r from-[#6366f1] to-[#8b5cf6] text-white shadow-md shadow-indigo-500/30'
                   : 'border border-[var(--border)] bg-[var(--glass)] text-[var(--muted)] hover:border-[#8b5cf6]/40 hover:text-[var(--text)]'
               )}
             >
               {cat}
-            </button>
+            </motion.button>
           ))}
         </div>
 
@@ -188,8 +178,8 @@ export function Projects({ projects, loading }: ProjectsProps) {
           ) : (
             <motion.div layout className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               <AnimatePresence mode={reduceMotion ? 'sync' : 'popLayout'}>
-                {visible.map((project) => (
-                  <TiltCard key={project._id} project={project} onOpen={() => setSelected(project)} />
+                {visible.map((project, i) => (
+                  <ProjectCard key={project._id} project={project} index={i} onOpen={() => setSelected(project)} />
                 ))}
               </AnimatePresence>
             </motion.div>

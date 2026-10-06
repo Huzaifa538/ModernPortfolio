@@ -22,6 +22,7 @@ import { Input } from '../ui/Input'
 import { Textarea } from '../ui/Textarea'
 import { Button } from '../ui/Button'
 import { Skeleton } from '../ui/Skeleton'
+import { Reveal } from '../ui/Reveal'
 import { api } from '../../lib/api'
 import type { ChatMessage, Profile } from '../../lib/types'
 
@@ -277,12 +278,7 @@ export function Contact({ profile }: { profile: Profile | null }) {
 
         <div className="mt-14 grid gap-10 lg:grid-cols-[0.9fr_1.1fr]">
           {/* Left: info cards + socials */}
-          <motion.div
-            initial={{ opacity: 0, x: -28 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true, margin: '-80px' }}
-            transition={{ duration: 0.6 }}
-          >
+          <Reveal distance={40}>
             <h3 className="font-display text-2xl font-bold">
               Don't be a stranger<span className="text-gradient">.</span>
             </h3>
@@ -292,8 +288,9 @@ export function Contact({ profile }: { profile: Profile | null }) {
             </p>
 
             <div className="mt-7 space-y-4">
-              {infoCards.map(({ icon: Icon, label, value, copy }) => (
-                <Card key={label} hover={copy} className="flex items-center gap-4 p-4">
+              {infoCards.map(({ icon: Icon, label, value, copy }, i) => (
+                <Reveal key={label} delay={i * 0.07} distance={28} tilt={7}>
+                <Card hover={copy} className="flex items-center gap-4 p-4">
                   <span className="rounded-xl bg-gradient-to-br from-[#6366f1]/15 to-[#22d3ee]/15 p-3 text-[#8b5cf6]">
                     <Icon className="h-5 w-5" />
                   </span>
@@ -317,6 +314,7 @@ export function Contact({ profile }: { profile: Profile | null }) {
                     </button>
                   )}
                 </Card>
+                </Reveal>
               ))}
             </div>
 
@@ -336,15 +334,10 @@ export function Contact({ profile }: { profile: Profile | null }) {
                 ))}
               </div>
             )}
-          </motion.div>
+          </Reveal>
 
           {/* Right: contact form, or the live chat once a conversation exists */}
-          <motion.div
-            initial={{ opacity: 0, x: 28 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true, margin: '-80px' }}
-            transition={{ duration: 0.6 }}
-          >
+          <Reveal distance={40} delay={0.12}>
             {conversationId ? (
               <Card padded={false} className="flex max-h-[640px] min-h-[480px] flex-col overflow-hidden">
                 {/* Chat header */}
@@ -477,7 +470,7 @@ export function Contact({ profile }: { profile: Profile | null }) {
                 </form>
               </Card>
             )}
-          </motion.div>
+          </Reveal>
         </div>
       </div>
     </section>

@@ -1,4 +1,5 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react'
+import { motion } from 'framer-motion'
 import { Loader2 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -20,7 +21,14 @@ const sizes: Record<Size, string> = {
   lg: 'px-7 py-3.5 text-base',
 }
 
-interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+// framer-motion redefines several DOM event props (drag/animation) with its
+// own signatures, so they are omitted here to keep the types compatible.
+type MotionSafeButtonProps = Omit<
+  ButtonHTMLAttributes<HTMLButtonElement>,
+  'onDrag' | 'onDragStart' | 'onDragEnd' | 'onAnimationStart' | 'onAnimationComplete' | 'onAnimationIteration'
+>
+
+interface ButtonProps extends MotionSafeButtonProps {
   variant?: Variant
   size?: Size
   loading?: boolean
@@ -32,12 +40,16 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   ref
 ) {
   return (
-    <button
+    <motion.button
       ref={ref}
       disabled={disabled || loading}
+      // Springs for the press — snappy but never harsh.
+      whileHover={{ scale: 1.045, y: -1 }}
+      whileTap={{ scale: 0.96, y: 0 }}
+      transition={{ type: 'spring', stiffness: 420, damping: 22 }}
       className={clsx(
-        'inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition-all duration-300',
-        'disabled:cursor-not-allowed disabled:opacity-60 active:scale-[0.98]',
+        'inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition-[box-shadow,border-color,background-color,color,filter] duration-300',
+        'disabled:cursor-not-allowed disabled:opacity-60',
         variants[variant],
         sizes[size],
         className
@@ -46,6 +58,6 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     >
       {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
       {children}
-    </button>
+    </motion.button>
   )
 })

@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
+import { useEffect, useRef, useState } from 'react'
+import { motion, useScroll, useTransform } from 'framer-motion'
 import { ArrowDown, Download, Github, Linkedin, Mail, Sparkles, Twitter } from 'lucide-react'
 import { Button } from '../ui/Button'
 import { Badge } from '../ui/Badge'
 import { resolveAssetUrl } from '../../lib/api'
+import { useReducedMotion } from '../../hooks/useReducedMotion'
 import type { Profile } from '../../lib/types'
 
 /** Types one role at a time, deletes it, moves to the next. */
@@ -47,6 +48,18 @@ export function Hero({ profile }: HeroProps) {
   const subtitle = profile?.heroSubtitle
   const avatar = resolveAssetUrl(profile?.avatarUrl)
   const available = profile?.availableForWork ?? true
+  const reduceMotion = useReducedMotion()
+
+  // Scroll-linked parallax: the aurora drifts down slowly while the copy
+  // rises and fades — separate speeds are what sell the depth.
+  const sectionRef = useRef<HTMLElement>(null)
+  const { scrollYProgress } = useScroll({
+    target: sectionRef,
+    offset: ['start start', 'end start'],
+  })
+  const bgY = useTransform(scrollYProgress, [0, 1], [0, 140])
+  const contentY = useTransform(scrollYProgress, [0, 1], [0, -64])
+  const contentOpacity = useTransform(scrollYProgress, [0, 0.8], [1, 0])
 
   const socials = [
     profile?.githubUrl && { href: profile.githubUrl, label: 'GitHub', icon: Github },
@@ -59,19 +72,26 @@ export function Hero({ profile }: HeroProps) {
     document.getElementById('projects')?.scrollIntoView({ behavior: 'smooth' })
 
   return (
-    <section id="home" className="relative flex min-h-screen items-center overflow-hidden">
-      {/* Aurora wash behind everything */}
-      <div className="aurora" aria-hidden>
+    <section id="home" ref={sectionRef} className="relative flex min-h-screen items-center overflow-hidden">
+      {/* Aurora wash behind everything — drifts on scroll for parallax depth */}
+      <motion.div
+        aria-hidden
+        style={reduceMotion ? undefined : { y: bgY }}
+        className="aurora"
+      >
         <div className="aurora-blob aurora-1" />
         <div className="aurora-blob aurora-2" />
         <div className="aurora-blob aurora-3" />
-      </div>
+      </motion.div>
       <div
         aria-hidden
         className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,var(--bg)_75%)]"
       />
 
-      <div className="relative z-10 mx-auto grid w-full max-w-6xl items-center gap-14 px-6 pb-24 pt-28 lg:grid-cols-[1.15fr_0.85fr] lg:pt-32">
+      <motion.div
+        style={reduceMotion ? undefined : { y: contentY, opacity: contentOpacity }}
+        className="relative z-10 mx-auto grid w-full max-w-6xl items-center gap-14 px-6 pb-24 pt-28 lg:grid-cols-[1.15fr_0.85fr] lg:pt-32"
+      >
         {/* Copy */}
         <div>
           <motion.div
@@ -101,15 +121,28 @@ export function Hero({ profile }: HeroProps) {
             Hey there — I'm
           </motion.p>
 
-          <motion.h1
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.14 }}
-            className="font-display mt-2 text-5xl font-bold leading-[1.05] tracking-tight sm:text-6xl lg:text-7xl"
-          >
-            {name.split(' ').slice(0, -1).join(' ')}{' '}
-            <span className="text-gradient">{name.split(' ').slice(-1)}</span>
-          </motion.h1>
+          <h1 className="font-display mt-2 text-5xl font-bold leading-[1.05] tracking-tight sm:text-6xl lg:text-7xl">
+            {name.split(' ').map((word, i, words) => {
+              const last = i === words.length - 1
+              return (
+                <span
+                  key={`${word}-${i}`}
+                  className="-mb-2 inline-block overflow-hidden pb-2 align-bottom"
+                >
+                  <motion.span
+                    className={`inline-block ${last ? 'text-gradient' : ''}`}
+                    style={{ transformPerspective: 600 }}
+                    initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: '110%', rotateX: -65 }}
+                    animate={{ opacity: 1, y: '0%', rotateX: 0 }}
+                    transition={{ duration: 0.75, delay: 0.14 + i * 0.08, ease: [0.22, 1, 0.36, 1] }}
+                  >
+                    {word}
+                    {last ? '' : ' '}
+                  </motion.span>
+                </span>
+              )
+            })}
+          </h1>
 
           <motion.h2
             initial={{ opacity: 0, y: 24 }}
@@ -212,7 +245,7 @@ export function Hero({ profile }: HeroProps) {
             </div>
           </div>
         </motion.div>
-      </div>
+      </motion.div>
 
       {/* Scroll cue */}
       <motion.a

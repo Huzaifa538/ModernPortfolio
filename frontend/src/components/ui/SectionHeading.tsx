@@ -15,10 +15,11 @@ export function SectionHeading({ label, title, subtitle, align = 'center' }: Sec
 
   return (
     <motion.div
-      initial={reduceMotion ? undefined : { opacity: 0, y: 24 }}
-      whileInView={{ opacity: 1, y: 0 }}
+      style={{ transformPerspective: 800 }}
+      initial={reduceMotion ? { opacity: 0, y: 16 } : { opacity: 0, y: 30, rotateX: -12 }}
+      whileInView={{ opacity: 1, y: 0, rotateX: 0 }}
       viewport={{ once: true, margin: '-80px' }}
-      transition={{ duration: 0.6, ease: 'easeOut' }}
+      transition={{ duration: 0.65, ease: 'easeOut' }}
       className={centered ? 'text-center mx-auto max-w-2xl' : 'max-w-2xl'}
     >
       <p className="font-mono text-xs tracking-[0.3em] uppercase text-[#8b5cf6]">

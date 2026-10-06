@@ -5,11 +5,13 @@ import clsx from 'clsx'
 import { SectionHeading } from '../ui/SectionHeading'
 import { Card } from '../ui/Card'
 import { Skeleton } from '../ui/Skeleton'
+import { useReducedMotion } from '../../hooks/useReducedMotion'
+import { TiltCard } from '../ui/TiltCard'
 import type { Skill } from '../../lib/types'
 
 const CATEGORIES = ['All', 'Frontend', 'Backend', 'Database', 'Tools', 'Other'] as const
 
-function ProgressBar({ level, animate }: { level: number; animate: boolean }) {
+function ProgressBar({ level }: { level: number }) {
   return (
     <div
       className="h-2 overflow-hidden rounded-full bg-[var(--surface2)]"
@@ -22,8 +24,9 @@ function ProgressBar({ level, animate }: { level: number; animate: boolean }) {
       <motion.div
         className="h-full rounded-full bg-gradient-to-r from-[#6366f1] via-[#8b5cf6] to-[#22d3ee]"
         initial={{ width: 0 }}
-        animate={{ width: animate ? `${level}%` : 0 }}
-        transition={{ duration: 1.1, ease: 'easeOut' }}
+        whileInView={{ width: `${level}%` }}
+        viewport={{ once: true, margin: '-40px' }}
+        transition={{ duration: 1.1, delay: 0.15, ease: 'easeOut' }}
       />
     </div>
   )
@@ -53,6 +56,7 @@ interface SkillsProps {
 
 export function Skills({ skills, loading }: SkillsProps) {
   const [tab, setTab] = useState<(typeof CATEGORIES)[number]>('All')
+  const reduceMotion = useReducedMotion()
 
   const visible = useMemo(
     () => (tab === 'All' ? skills : skills.filter((s) => s.category === tab)),
@@ -71,11 +75,13 @@ export function Skills({ skills, loading }: SkillsProps) {
         {/* Filter tabs */}
         <div className="mt-10 flex flex-wrap justify-center gap-2.5">
           {CATEGORIES.map((cat) => (
-            <button
+            <motion.button
               key={cat}
               onClick={() => setTab(cat)}
+              whileTap={{ scale: 0.93 }}
+              transition={{ type: 'spring', stiffness: 500, damping: 22 }}
               className={clsx(
-                'rounded-full px-5 py-2 text-sm font-medium transition-all duration-300',
+                'rounded-full px-5 py-2 text-sm font-medium transition-[box-shadow,border-color,background-color,color] duration-300',
                 tab === cat
                   ? 'bg-gradient-to-r from-[#6366f1] to-[#8b5cf6] text-white shadow-md shadow-indigo-500/30'
                   : 'border border-[var(--border)] bg-[var(--glass)] text-[var(--muted)] hover:border-[#8b5cf6]/40 hover:text-[var(--text)]'
@@ -83,7 +89,7 @@ export function Skills({ skills, loading }: SkillsProps) {
               aria-pressed={tab === cat}
             >
               {cat}
-            </button>
+            </motion.button>
           ))}
         </div>
 
@@ -102,26 +108,30 @@ export function Skills({ skills, loading }: SkillsProps) {
             </Card>
           ) : (
             <motion.div layout className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {visible.map((skill) => (
+              {visible.map((skill, i) => (
                 <motion.div
                   key={skill._id}
                   layout
-                  initial={{ opacity: 0, scale: 0.96 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.35 }}
+                  style={{ transformPerspective: 900 }}
+                  initial={reduceMotion ? { opacity: 0, y: 20 } : { opacity: 0, y: 36, rotateX: 10 }}
+                  whileInView={{ opacity: 1, y: 0, rotateX: 0 }}
+                  viewport={{ once: true, margin: '-60px' }}
+                  transition={{ duration: 0.55, delay: Math.min(i * 0.06, 0.36), ease: 'easeOut' }}
                 >
-                  <Card hover padded className="p-5">
-                    <div className="flex items-center justify-between gap-3">
-                      <h3 className="font-display font-semibold">{skill.name}</h3>
-                      <span className="font-mono text-xs text-[var(--muted)]">{skill.level}%</span>
-                    </div>
-                    <div className="mt-3">
-                      <ProgressBar level={skill.level} animate />
-                    </div>
-                    <p className="font-mono mt-3 text-[11px] uppercase tracking-widest text-[var(--muted)]">
-                      {skill.category}
-                    </p>
-                  </Card>
+                  <TiltCard maxTilt={6} wrapperClassName="h-full" className="h-full">
+                    <Card hover padded className="p-5 h-full">
+                      <div className="flex items-center justify-between gap-3">
+                        <h3 className="font-display font-semibold">{skill.name}</h3>
+                        <span className="font-mono text-xs text-[var(--muted)]">{skill.level}%</span>
+                      </div>
+                      <div className="mt-3">
+                        <ProgressBar level={skill.level} />
+                      </div>
+                      <p className="font-mono mt-3 text-[11px] uppercase tracking-widest text-[var(--muted)]">
+                        {skill.category}
+                      </p>
+                    </Card>
+                  </TiltCard>
                 </motion.div>
               ))}
             </motion.div>

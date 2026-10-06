@@ -5,6 +5,7 @@ import { SectionHeading } from '../ui/SectionHeading'
 import { Card } from '../ui/Card'
 import { Badge } from '../ui/Badge'
 import { Skeleton } from '../ui/Skeleton'
+import { useReducedMotion } from '../../hooks/useReducedMotion'
 import type { Experience } from '../../lib/types'
 
 function dateRange(exp: Experience): string {
@@ -20,6 +21,8 @@ interface ExperienceProps {
 }
 
 export function Experience({ experiences, loading }: ExperienceProps) {
+  const reduceMotion = useReducedMotion()
+
   return (
     <section id="experience" className="relative py-24 sm:py-32">
       <div className="mx-auto max-w-4xl px-6">
@@ -43,11 +46,19 @@ export function Experience({ experiences, loading }: ExperienceProps) {
             </Card>
           ) : (
             <div className="relative">
-              {/* The gradient spine */}
+              {/* The gradient spine — draws itself downward as you scroll in */}
               <div
                 aria-hidden
-                className="absolute left-5 top-0 h-full w-0.5 bg-gradient-to-b from-[#6366f1] via-[#8b5cf6] to-[#22d3ee] opacity-40 md:left-1/2 md:-translate-x-1/2"
-              />
+                className="absolute left-5 top-0 h-full md:left-1/2 md:-translate-x-1/2"
+              >
+                <motion.div
+                  className="h-full w-0.5 origin-top bg-gradient-to-b from-[#6366f1] via-[#8b5cf6] to-[#22d3ee] opacity-40"
+                  initial={reduceMotion ? undefined : { scaleY: 0 }}
+                  whileInView={{ scaleY: 1 }}
+                  viewport={{ once: true, margin: '-100px' }}
+                  transition={{ duration: 1.4, ease: 'easeOut' }}
+                />
+              </div>
 
               <div className="space-y-10">
                 {experiences.map((exp, i) => {
@@ -59,14 +70,23 @@ export function Experience({ experiences, loading }: ExperienceProps) {
                         aria-hidden
                         className="absolute left-5 top-6 z-10 -translate-x-1/2 md:left-1/2"
                       >
-                        <span className="block h-4 w-4 rounded-full bg-gradient-to-br from-[#6366f1] to-[#22d3ee] ring-4 ring-[#8b5cf6]/20 shadow-lg shadow-indigo-500/40" />
+                        <motion.span
+                          className="block"
+                          initial={reduceMotion ? undefined : { scale: 0 }}
+                          whileInView={{ scale: 1 }}
+                          viewport={{ once: true, margin: '-60px' }}
+                          transition={{ type: 'spring', stiffness: 320, damping: 16, delay: 0.15 }}
+                        >
+                          <span className="block h-4 w-4 rounded-full bg-gradient-to-br from-[#6366f1] to-[#22d3ee] ring-4 ring-[#8b5cf6]/20 shadow-lg shadow-indigo-500/40" />
+                        </motion.span>
                       </span>
 
                       <motion.div
-                        initial={{ opacity: 0, y: 28 }}
-                        whileInView={{ opacity: 1, y: 0 }}
+                        style={{ transformPerspective: 900 }}
+                        initial={reduceMotion ? { opacity: 0, y: 24 } : { opacity: 0, y: 36, rotateX: 10 }}
+                        whileInView={{ opacity: 1, y: 0, rotateX: 0 }}
                         viewport={{ once: true, margin: '-60px' }}
-                        transition={{ duration: 0.55 }}
+                        transition={{ duration: 0.6, delay: 0.1, ease: 'easeOut' }}
                         className={clsx(
                           'ml-12 md:ml-0',
                           leftSide ? 'md:col-start-1 md:pr-2 md:text-right' : 'md:col-start-2 md:pl-2'
