@@ -63,6 +63,12 @@ export function resolveAssetUrl(path?: string): string {
   return `${apiBase}${path.startsWith('/') ? path : `/${path}`}`
 }
 
+/**
+ * Portrait bundled with the site, shown until Huzaifa sets his own avatar
+ * from the admin panel. An admin-uploaded avatar always wins over this.
+ */
+export const DEFAULT_AVATAR = '/huzaifa-office-portrait.jpg'
+
 export const auth = {
   getToken: () => localStorage.getItem(TOKEN_KEY),
   setToken: (token: string) => localStorage.setItem(TOKEN_KEY, token),

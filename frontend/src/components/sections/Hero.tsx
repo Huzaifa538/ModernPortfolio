@@ -3,7 +3,7 @@ import { motion, useScroll, useTransform } from 'framer-motion'
 import { ArrowDown, Download, Github, Linkedin, Mail, Sparkles, Twitter } from 'lucide-react'
 import { Button } from '../ui/Button'
 import { Badge } from '../ui/Badge'
-import { resolveAssetUrl } from '../../lib/api'
+import { resolveAssetUrl, DEFAULT_AVATAR } from '../../lib/api'
 import { useReducedMotion } from '../../hooks/useReducedMotion'
 import type { Profile } from '../../lib/types'
 
@@ -46,7 +46,7 @@ export function Hero({ profile }: HeroProps) {
   const name = profile?.fullName ?? 'Your Name'
   const title = profile?.heroTitle ?? 'Building digital experiences that people love'
   const subtitle = profile?.heroSubtitle
-  const avatar = resolveAssetUrl(profile?.avatarUrl)
+  const avatar = resolveAssetUrl(profile?.avatarUrl) || DEFAULT_AVATAR
   const available = profile?.availableForWork ?? true
   const reduceMotion = useReducedMotion()
 

@@ -5,7 +5,7 @@ import { SectionHeading } from '../ui/SectionHeading'
 import { SectionFlip } from '../ui/SectionFlip'
 import { Card } from '../ui/Card'
 import { Reveal } from '../ui/Reveal'
-import { resolveAssetUrl } from '../../lib/api'
+import { resolveAssetUrl, DEFAULT_AVATAR } from '../../lib/api'
 import { useReducedMotion } from '../../hooks/useReducedMotion'
 import type { Profile } from '../../lib/types'
 
@@ -58,7 +58,7 @@ export function About({ profile }: { profile: Profile | null }) {
   const statsInView = useInView(statsRef, { once: true, margin: '-80px' })
 
   const name = profile?.fullName ?? 'Your Name'
-  const avatar = resolveAssetUrl(profile?.avatarUrl)
+  const avatar = resolveAssetUrl(profile?.avatarUrl) || DEFAULT_AVATAR
   const bio = profile?.aboutText ?? profile?.bio ?? 'A developer who cares about the details — the micro-interactions, the empty states, the loading shimmer. I build full-stack apps with modern tools and obsess over the experience.'
 
   const contactRows = [
